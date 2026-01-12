@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 from typing import List, Optional
 # Импортируем модуль config для доступа к global_word_book
-import config.global_word_book as gwb
+import c4_checker_lib.с4_config.global_word_book as gwb
 
 def select_diagram_from_drawio(drawio_file_path: str) -> Optional[ET.Element]:
     """

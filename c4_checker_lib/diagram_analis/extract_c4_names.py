@@ -1,9 +1,9 @@
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Union
 from math import *
-import config.global_word_book as gwb
+import c4_checker_lib.с4_config.global_word_book as gwb
 
-from config.imena_uslug import *
+from c4_checker_lib.с4_config.imena_uslug import *
 
 def extract_c4_names(drawio_file_path: str) -> List[str]:
     """
