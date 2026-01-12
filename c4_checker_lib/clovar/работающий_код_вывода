@@ -1,0 +1,18 @@
+import xml.etree.ElementTree as ET
+
+
+def extract_c4_names(drawio_file_path):
+    
+    with open(drawio_file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+
+    root = ET.fromstring(content)
+
+
+    c4_names = []
+    for elem in root.iter():
+        if 'c4Technology' in elem.attrib:
+            c4_names.append(elem.attrib['c4Technology'])
+
+    return c4_names

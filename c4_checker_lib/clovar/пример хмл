@@ -1,0 +1,11 @@
+<mxfile>
+    <diagram name="Лист 1">
+        &lt;mxGraphModel&gt;
+            &lt;root&gt;
+                <mxCell id="1" c4Technology="Nginx" /> #атрибуты для каждого компонента
+                ...
+            &lt;/root&gt;
+        &lt;/mxGraphModel&gt;
+    </diagram>
+    <diagram name="Лист 2"> ... </diagram>
+</mxfile>

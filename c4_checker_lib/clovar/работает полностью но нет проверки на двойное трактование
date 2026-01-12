@@ -1,0 +1,107 @@
+import xml.etree.ElementTree as ET
+import ast
+
+def extract_c4_names(drawio_file_path, imena_uslug_file="config.imena_uslug"):
+    """
+    Извлекает значения атрибута 'c4Technology' из указанного файла Drawio, сравнивает их с эталоном
+    из файла IMENA_USLUG и возвращает отфильтрованный список.
+
+    Args:
+        drawio_file_path (str): Путь к файлу .drawio.
+        imena_uslug_file (str, optional): Путь к файлу с эталонными именами услуг.
+            По умолчанию "config.imena_uslug".
+
+    Returns:
+        list: Список строк, представляющих отфильтрованные значения атрибутов 'c4Technology',
+              или пустой список в случае ошибки.
+    """
+    c4_technologies = []
+    filtered_c4_technologies = []
+
+    # 1. Обработка файла Drawio и разбор XML
+    try:
+        with open(drawio_file_path, 'r', encoding='utf-8') as f:
+            xml_content = f.read()
+        root = ET.fromstring(xml_content)
+    except FileNotFoundError:
+        print(f"❌ Ошибка: Файл не найден по пути: {drawio_file_path}")
+        return []
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML в файле: {e}")
+        return []
+    except Exception as e:
+        print(f"❌ Ошибка при работе с файлом: {e}")
+        return []
+
+    # 2. Выбор листа (диаграммы)
+    diagrams = root.findall("diagram")
+    if not diagrams:
+        print("❌ Ошибка: В файле не найдено ни одного листа (диаграммы).")
+        return []
+
+    selected_diagram = None
+    print("\nДоступные листы (диаграммы) в файле:")
+    for i, diagram in enumerate(diagrams):
+        name = diagram.attrib.get("name", f"Лист {i + 1}")
+        print(f"{i + 1}. {name}")
+
+    while True:
+        try:
+            sheet_number = int(input("Введите номер листа, который хотите проанализировать: "))
+            if 1 <= sheet_number <= len(diagrams):
+                selected_diagram = diagrams[sheet_number - 1]
+                break
+            else:
+                print("❌ Ошибка: Некорректный номер листа. Попробуйте еще раз.")
+        except ValueError:
+            print("❌ Ошибка: Введите целое число, представляющее номер листа.")
+
+    diagram_name = selected_diagram.attrib.get("name", "(Без имени)")
+    print(f"✅ Выбран лист: \"{diagram_name}\"")
+
+    xml_content_of_selected_diagram = ET.tostring(selected_diagram, encoding='unicode')
+    try:
+        diagram_root = ET.fromstring(xml_content_of_selected_diagram)
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML содержимого листа: {e}")
+        return []
+
+    # 3. Извлечение c4Technology из выбранного листа
+    for element in diagram_root.iter():
+        if 'c4Technology' in element.attrib:
+            c4_technologies.append(element.attrib['c4Technology'])
+
+    # 4. Загрузка эталонных имен услуг из файла
+    try:
+        from config.imena_uslug import IMENA_USLUG
+        imena_uslug_data = IMENA_USLUG
+
+    except ImportError as e:
+        print(f"❌ Ошибка: Не удалось импортировать данные из файла: {e}")
+        return []
+    except Exception as e:
+        print(f"❌ Ошибка при чтении данных из файла {imena_uslug_file}: {e}")
+        return []
+
+    # 5. Фильтрация и форматирование имен
+    for c4_tech in c4_technologies:
+        if not c4_tech:  # Проверяем, что c4Technology не пустая строка
+            print("❌ Ошибка: Атрибут c4Technology пуст.")
+            continue  # Переходим к следующей итерации цикла, не обрабатывая дальше
+        for key, value in imena_uslug_data.items():
+            if key in c4_tech:
+                if isinstance(value, dict):
+                    # value - это словарь, извлекаем значение ключа
+                    human_name = list(value.keys())[0]
+                    spam_value = list(value.values())[0]
+                    #  Заменяем have_spam_usluga_1_1 на 1 или 0
+                    spam_value_numeric = 1 if "have_spam" in spam_value else 0
+                    filtered_c4_technologies.append(f"{human_name} ({spam_value_numeric})")
+                elif isinstance(value, (int, str)):
+                    # value - это int или str, значит это строка типа  "have_spam_usluga_1_1": 0
+                    filtered_c4_technologies.append(key)  # Добавляем ключ без фильтрации
+                else:
+                    print(f"⚠️  Предупреждение: Неожиданный тип значения для '{key}'.  Пропускаем фильтрацию для этого элемента.")
+                    filtered_c4_technologies.append(key)  # Добавляем элемент без фильтрации
+
+    return filtered_c4_technologies

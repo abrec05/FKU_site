@@ -1,0 +1,25 @@
+import xml.etree.ElementTree as ET
+
+
+def extract_c4_names(drawio_file_path):
+    with open(drawio_file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    root = ET.fromstring(content)
+
+    # 🔽 Печатаем все имена листов (если они есть)
+    diagrams = root.findall("diagram")
+    if diagrams:
+        print("📄 Листы в файле:")
+        for diagram in diagrams:
+            name = diagram.attrib.get("name", "(без имени)")
+            print(f"- {name}")
+        print("")  # пустая строка-разделитель
+
+    # 🔍 Поиск всех элементов с атрибутом c4Technology
+    c4_names = []
+    for elem in root.iter():
+        if 'c4Technology' in elem.attrib:
+            c4_names.append(elem.attrib['c4Technology'])
+
+    return c4_names

@@ -1,0 +1,58 @@
+import xml.etree.ElementTree as ET
+# import tkinter as tk
+# from tkinter import filedialog
+# from tkinter import messagebox
+
+def extract_c4_names(drawio_file_path):
+    """
+    Извлекает все значения атрибута 'c4Technology' из указанного файла Drawio.
+    Автоматически выбирает первый лист (диаграмму) для анализа.
+
+    Args:
+        drawio_file_path (str): Путь к файлу .drawio.
+
+    Returns:
+        list: Список строк, представляющих значения атрибутов 'c4Technology',
+              или пустой список в случае ошибки или отсутствия атрибутов.
+    """
+    c4_technologies = []  # Инициализируем список для хранения результатов
+
+    # 1. Обработка файла и разбор XML
+    try:
+        with open(drawio_file_path, 'r', encoding='utf-8') as f:
+            xml_content = f.read()
+        root = ET.fromstring(xml_content)
+    except FileNotFoundError:
+        print(f"❌ Ошибка: Файл не найден по пути: {drawio_file_path}")
+        return c4_technologies  # Возвращаем пустой список при ошибке
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML в файле: {e}")
+        return c4_technologies  # Возвращаем пустой список при ошибке
+    except Exception as e:
+        print(f"❌ Ошибка при работе с файлом: {e}")
+        return c4_technologies
+
+    # 2. Выбор листа (диаграммы)
+    diagrams = root.findall("diagram")  # Находим все элементы <diagram>
+    if not diagrams:
+        print("❌ Ошибка: В файле не найдено ни одного листа (диаграммы).")
+        return c4_technologies  # Возвращаем пустой список, если нет диаграмм
+
+    selected_diagram = diagrams[0]  # Автоматически выбираем первый лист
+
+    # 3. Извлечение c4Technology из выбранного листа
+    diagram_name = selected_diagram.attrib.get("name", "(Без имени)")
+    print(f"✅ Выбран лист: \"{diagram_name}\"")
+
+    xml_content_of_selected_diagram = ET.tostring(selected_diagram, encoding='unicode')
+    try:
+        diagram_root = ET.fromstring(xml_content_of_selected_diagram)
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML содержимого листа: {e}")
+        return c4_technologies  # Возвращаем пустой список при ошибке парсинга
+
+    for element in diagram_root.iter():
+        if 'c4Technology' in element.attrib:
+            c4_technologies.append(element.attrib['c4Technology'])
+
+    return c4_technologies

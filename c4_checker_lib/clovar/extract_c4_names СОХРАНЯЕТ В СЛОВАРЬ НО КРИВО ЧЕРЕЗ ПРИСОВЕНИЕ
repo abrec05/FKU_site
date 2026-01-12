@@ -1,0 +1,190 @@
+import xml.etree.ElementTree as ET
+from typing import List, Dict, Union, Optional
+import config.global_word_book as gwb
+import pprint
+import os
+
+def extract_c4_names(drawio_file_path: str,
+                     imena_uslug_file: str = "config.imena_uslug") -> List[str]:
+    """
+    Извлекает значения атрибута 'B____c4Technology' из указанного файла Drawio, сравнивает их с эталоном
+    из файла IMENA_USLUG и возвращает отфильтрованный список, отдавая предпочтение наиболее точному совпадению.
+    Также извлекает и сохраняет связанные атрибуты в global_word_book для *всех* найденных B____c4Technology.
+
+    Args:
+        drawio_file_path (str): Путь к файлу .drawio.
+        imena_uslug_file (str, optional): Путь к файлу с эталонными именами услуг.
+            По умолчанию "config.imena_uslug".
+
+    Returns:
+        List[str]: Список строк, представляющих отфильтрованные значения атрибутов 'B____c4Technology',
+                        или пустой список в случае ошибки.
+    """
+    c4_technologies: List[str] = []
+    filtered_c4_technologies: List[str] = []
+    service_counter: int = 1
+
+    try:
+        with open(drawio_file_path, 'r', encoding='utf-8') as f:
+            xml_content = f.read()
+        root = ET.fromstring(xml_content)
+    except FileNotFoundError:
+        print(f"❌ Ошибка: Файл не найден по пути: {drawio_file_path}")
+        return []
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML в файле: {e}")
+        return []
+    except Exception as e:
+        print(f"❌ Ошибка при работе с файлом: {e}")
+        return []
+
+    diagrams = root.findall("diagram")
+    if not diagrams:
+        print("❌ Ошибка: В файле не найдено ни одного листа (диаграммы).")
+        return []
+
+    selected_diagram = None
+    if gwb.SELECTED_SHEET_NAME:
+        for diagram in diagrams:
+            if diagram.attrib.get("name") == gwb.SELECTED_SHEET_NAME:
+                selected_diagram = diagram
+                break
+        if selected_diagram is None:
+            print(
+                f"❌ Ошибка: Лист с именем '{gwb.SELECTED_SHEET_NAME}' не найден в файле.")
+            return []
+    else:
+        print(
+            "❌ Ошибка: Имя листа не выбрано.  Установите 'SELECTED_SHEET_NAME' в global_word_book.")
+        return []
+
+    diagram_name = selected_diagram.attrib.get("name", "(Без имени)")
+    print(f"✅ Выбран лист: \"{diagram_name}\"")
+
+    xml_content_of_selected_diagram = ET.tostring(
+        selected_diagram, encoding='unicode')
+    try:
+        diagram_root = ET.fromstring(xml_content_of_selected_diagram)
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML содержимого листа: {e}")
+        return []
+
+    elements_with_c4_tech = []
+    for element in diagram_root.iter():
+        if 'B____c4Technology' in element.attrib:
+            c4_technologies.append(element.attrib['B____c4Technology'])
+            elements_with_c4_tech.append(
+                element)
+
+    try:
+        from config.imena_uslug import IMENA_USLUG
+        imena_uslug_data: Dict[str, Union[str, int,
+                                         Dict[str, Union[str, int]]]] = IMENA_USLUG
+    except ImportError as e:
+        print(f"❌ Ошибка: Не удалось импортировать данные из файла: {e}")
+        return []
+    except Exception as e:
+        print(f"❌ Ошибка при чтении данных из файла {imena_uslug_file}: {e}")
+        return []
+
+    for c4_tech, element in zip(
+            c4_technologies,
+            elements_with_c4_tech):
+        if not c4_tech:
+            print("❌ Ошибка: Атрибут B____c4Technology пуст.")
+            continue
+        best_match: Optional[str] = None
+        best_match_length: int = 0
+        for key, value in imena_uslug_data.items():
+            if key in c4_tech:
+                if best_match is None or len(key) > best_match_length:
+                    best_match_length = len(key)
+                    if isinstance(value, dict):
+                        human_name = list(value.keys())[0]
+                        best_match = human_name
+                        element_dict = element.attrib
+                        update_global_word_book(service_counter, human_name, element_dict)
+                    elif isinstance(value, (int, str)):
+                        best_match = key
+                        element_dict = element.attrib
+                        update_global_word_book(service_counter, key, element_dict)
+                    else:
+                        print(
+                            f"⚠️  Предупреждение: Неожиданный тип значения для '{key}'.  Пропускаем фильтрацию для этого элемента."
+                        )
+                        best_match = key
+        if best_match:
+            filtered_c4_technologies.append(best_match)
+            print(
+                f"✅  Успешно обработана услуга {service_counter}: {best_match}")
+            service_counter += 1
+        else:
+            print(f"❌  Не найдено соответствие для c4_tech: {c4_tech}")
+
+    print(f"✅  Итоговое содержимое gwb.c4_tech_data:")
+    pprint.pprint(gwb.c4_tech_data)
+    return filtered_c4_technologies
+
+
+
+def update_global_word_book(service_counter: int, service_name: str, element_dict: Dict[str, Union[str, int]]) -> None:
+    """
+    Обновляет словарь c4_tech_data в файле global_word_book.py.  Добавляет запись *внутрь*
+    существующего словаря, сохраняя остальное содержимое файла.
+
+    Args:
+        service_counter (int):  Уникальный идентификатор услуги.
+        service_name (str):  Имя услуги.
+        element_dict (Dict[str, Union[str, int]]): Словарь с атрибутами элемента.
+    """
+    # Получаем путь к файлу global_word_book.py
+    module_path = os.path.abspath(gwb.__file__)
+    config_dir = os.path.dirname(module_path)
+    file_path = os.path.join(config_dir, "global_word_book.py")
+
+    # Формируем строку с данными для добавления.  Важно форматирование!
+    data_string = f"    c4_tech_data[{service_counter}] = {{" \
+                  f"'service_name': '{service_name}', " \
+                  f"'E____CPU': {element_dict.get('E____CPU', 0)}, " \
+                  f"'F____RAM': {element_dict.get('F____RAM', 0)}, " \
+                  f"'G____SSD': {element_dict.get('G____SSD', 0)}, " \
+                  f"'H____HDD_Fast': {element_dict.get('H____HDD_Fast', 0)}, " \
+                  f"'I____HDD_Slow': {element_dict.get('I____HDD_Slow', 0)}, " \
+                  f"'J____OS_type': '{element_dict.get('J____OS_type', 0)}', " \
+                  f"'K____OS_count': {element_dict.get('K____OS_count', 0)}}}"
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception as e:
+        print(f"❌ Ошибка при чтении файла global_word_book.py: {e}")
+        return
+
+    # Ищем строку, где начинается словарь c4_tech_data
+    start_index = -1
+    end_index = -1
+    for i, line in enumerate(lines):
+        if "c4_tech_data = {" in line:
+            start_index = i
+        elif start_index != -1 and "}" in line:
+            end_index = i
+            break
+
+    if start_index != -1 and end_index != -1:
+        # Вставляем новую запись внутрь словаря.  Сохраняем отступы.
+        lines.insert(end_index, f"{data_string},\n")  # Добавляем запятую для разделения элементов
+    elif start_index != -1: # If only the start is found, it means it is an empty dict
+         lines.insert(start_index+1, f"{data_string}\n")
+    else:
+        print(
+            "❌ Ошибка: Не найдено определение словаря c4_tech_data в global_word_book.py. Данные не были записаны."
+        )
+        return
+
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+        print(f"✅ Данные успешно записаны в global_word_book.py (внутри словаря).")
+    except Exception as e:
+        print(f"❌ Ошибка при записи в файл global_word_book.py: {e}")
+        return

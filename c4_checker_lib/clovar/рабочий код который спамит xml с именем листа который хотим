@@ -1,0 +1,61 @@
+import xml.etree.ElementTree as ET
+# import tkinter as tk  # Закомментируем импорт tkinter
+# from tkinter import messagebox # Закомментируем импорт messagebox
+
+def get_xml_of_selected_sheet(drawio_file_path, selected_sheet_name="Компонентная"): # Добавим выбор листа
+    """
+    Загружает файл .drawio, выбирает указанный лист и возвращает его XML-содержимое.
+    """
+    try:
+        with open(drawio_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except FileNotFoundError:
+        print(f"❌ Ошибка: Файл не найден по пути {drawio_file_path}")
+        return "", False
+    except Exception as e:
+        print(f"❌ Ошибка при чтении файла: {e}")
+        return "", False
+
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Невозможно разобрать основной файл '{drawio_file_path}': {e}")
+        return "", False
+
+    diagrams = root.findall("diagram")
+    if not diagrams:
+        print("❌ Нет ни одного листа <diagram> в файле.")
+        return "", False
+
+    selected_diagram_element = None
+    for diagram_elem in diagrams:
+        name = diagram_elem.attrib.get("name", "(без имени)")
+        if name == selected_sheet_name:  # Выбираем лист по имени
+            selected_diagram_element = diagram_elem
+            print(f"✅ Выбран лист (загон): \"{name}\".")
+            break
+
+    if selected_diagram_element is not None:
+        xml_content_of_diagram = ET.tostring(selected_diagram_element, encoding='unicode')
+        return xml_content_of_diagram, True
+    else:
+        print(f"❌ Лист (загон) с именем \"{selected_sheet_name}\" не найден.")
+        return "", False
+
+
+
+def extract_c4_technology(xml_content):
+    """
+    Извлекает первое значение атрибута c4Technology из предоставленного XML-содержимого.
+    """
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Невозможно разобрать XML-содержимое листа: {e}")
+        return None
+
+    for elem in root.iter():
+        if 'c4Technology' in elem.attrib:
+            return elem.attrib['c4Technology']
+
+    return None

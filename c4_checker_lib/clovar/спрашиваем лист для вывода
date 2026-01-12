@@ -1,0 +1,75 @@
+import xml.etree.ElementTree as ET
+# import tkinter as tk
+# from tkinter import filedialog
+# from tkinter import messagebox
+
+def extract_c4_names(drawio_file_path):
+    """
+    Извлекает все значения атрибута 'c4Technology' из указанного файла Drawio,
+    предварительно позволяя пользователю выбрать лист (диаграмму) для анализа через консоль.
+
+    Args:
+        drawio_file_path (str): Путь к файлу .drawio.
+
+    Returns:
+        list: Список строк, представляющих значения атрибутов 'c4Technology',
+              или пустой список в случае ошибки или отсутствия атрибутов.
+    """
+    c4_technologies = []
+
+    # 1. Обработка файла и разбор XML
+    try:
+        with open(drawio_file_path, 'r', encoding='utf-8') as f:
+            xml_content = f.read()
+        root = ET.fromstring(xml_content)
+    except FileNotFoundError:
+        print(f"❌ Ошибка: Файл не найден по пути: {drawio_file_path}")
+        return c4_technologies
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML в файле: {e}")
+        return c4_technologies
+    except Exception as e:
+        print(f"❌ Ошибка при работе с файлом: {e}")
+        return c4_technologies
+
+    # 2. Выбор листа (диаграммы)
+    diagrams = root.findall("diagram")
+    if not diagrams:
+        print("❌ Ошибка: В файле не найдено ни одного листа (диаграммы).")
+        return c4_technologies
+
+    selected_diagram = None
+
+    # Выбор листа через консоль
+    print("\nДоступные листы (диаграммы) в файле:")
+    for i, diagram in enumerate(diagrams):
+        name = diagram.attrib.get("name", f"Лист {i + 1}")  # Отображаем "Лист 1", "Лист 2" и т.д.
+        print(f"{i + 1}. {name}")
+
+    while True:
+        try:
+            sheet_number = int(input("Введите номер листа, который хотите проанализировать: "))
+            if 1 <= sheet_number <= len(diagrams):
+                selected_diagram = diagrams[sheet_number - 1]
+                break
+            else:
+                print("❌ Ошибка: Некорректный номер листа. Попробуйте еще раз.")
+        except ValueError:
+            print("❌ Ошибка: Введите целое число, представляющее номер листа.")
+
+    diagram_name = selected_diagram.attrib.get("name", "(Без имени)")
+    print(f"✅ Выбран лист: \"{diagram_name}\"")
+
+    # 3. Извлечение c4Technology из выбранного листа
+    xml_content_of_selected_diagram = ET.tostring(selected_diagram, encoding='unicode')
+    try:
+        diagram_root = ET.fromstring(xml_content_of_selected_diagram)
+    except ET.ParseError as e:
+        print(f"❌ Ошибка XML: Ошибка разбора XML содержимого листа: {e}")
+        return c4_technologies
+
+    for element in diagram_root.iter():
+        if 'c4Technology' in element.attrib:
+            c4_technologies.append(element.attrib['c4Technology'])
+
+    return c4_technologies
