@@ -214,7 +214,6 @@ def update_global_word_book(service_name: set, NumberService: str, element_dict,
     global c4_tech_data
 
     name = next(iter(service_name))
-    print(11111, element_dict)
     if f == 2:
         record = [element_dict[0], 1]
     elif f == 1:

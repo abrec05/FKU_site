@@ -9,8 +9,6 @@
     :root{
       --bg1:#071a3a;
       --bg2:#0a2a66;
-      --card:#0b2b5f;
-      --card2:#0a2552;
       --stroke:rgba(255,255,255,.14);
       --text:rgba(255,255,255,.92);
       --muted:rgba(255,255,255,.7);
@@ -34,10 +32,7 @@
       padding: 36px 18px 60px;
     }
 
-    .wrap{
-      max-width: 980px;
-      margin: 0 auto;
-    }
+    .wrap{ max-width: 980px; margin: 0 auto; }
 
     .header{
       display:flex;
@@ -47,19 +42,9 @@
       margin-bottom: 18px;
     }
 
-    .title{
-      line-height: 1.05;
-    }
-    .title h1{
-      margin:0;
-      font-size: 34px;
-      letter-spacing: .3px;
-    }
-    .title p{
-      margin: 10px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
+    .title{ line-height: 1.05; }
+    .title h1{ margin:0; font-size: 34px; letter-spacing: .3px; }
+    .title p{ margin: 10px 0 0; color: var(--muted); font-size: 14px; }
 
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
@@ -69,19 +54,14 @@
       overflow:hidden;
     }
 
-    .card-inner{
-      padding: 20px;
-    }
+    .card-inner{ padding: 20px; }
 
     .grid{
       display:grid;
       grid-template-columns: 1.1fr .9fr;
       gap: 16px;
     }
-
-    @media (max-width: 820px){
-      .grid{ grid-template-columns: 1fr; }
-    }
+    @media (max-width: 820px){ .grid{ grid-template-columns: 1fr; } }
 
     .section-title{
       margin: 0 0 10px;
@@ -104,7 +84,7 @@
       padding: 12px 14px;
       border-radius: 14px;
       cursor:pointer;
-      font-weight: 600;
+      font-weight: 700;
       transition: transform .05s ease, background .15s ease, border-color .15s ease;
       display:inline-flex;
       align-items:center;
@@ -123,20 +103,10 @@
       border-color: rgba(255,255,255,.12);
       color: #071a3a;
     }
-    .btn-primary:hover{
-      filter: brightness(1.02);
-      border-color: rgba(255,255,255,.22);
-    }
+    .btn-primary:hover{ filter: brightness(1.02); border-color: rgba(255,255,255,.22); }
 
-    .btn-ghost{
-      background: rgba(255,255,255,.05);
-    }
+    .meta{ margin-top: 10px; display:grid; gap: 8px; }
 
-    .meta{
-      margin-top: 10px;
-      display:grid;
-      gap: 8px;
-    }
     .pill{
       border: 1px solid rgba(255,255,255,.14);
       background: rgba(0,0,0,.15);
@@ -148,11 +118,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .pill b{
-      color: var(--text);
-      font-weight: 700;
-      margin-right: 6px;
-    }
+    .pill b{ color: var(--text); font-weight: 800; margin-right: 6px; }
 
     .env{
       display:flex;
@@ -160,7 +126,7 @@
       flex-wrap: wrap;
     }
 
-    /* Радиокнопки выглядят как кнопки */
+    /* Радио выглядят как кнопки */
     .env input{ display:none; }
     .env label{
       border: 1px solid rgba(255,255,255,.18);
@@ -185,11 +151,7 @@
     }
     .env label:active{ transform: translateY(1px); }
 
-    .actions{
-      display:flex;
-      justify-content:flex-end;
-      margin-top: 16px;
-    }
+    .actions{ display:flex; justify-content:flex-end; margin-top: 16px; }
 
     .hint{
       margin-top: 10px;
@@ -198,11 +160,7 @@
       line-height: 1.4;
     }
 
-    .output{
-      margin-top: 16px;
-      border-top: 1px solid rgba(255,255,255,.12);
-      padding-top: 16px;
-    }
+    .output{ margin-top: 16px; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
 
     .logbox{
       height: 260px;
@@ -216,10 +174,6 @@
       line-height: 1.5;
       white-space: pre-wrap;
     }
-
-    .logbox .ok{ color: var(--ok); font-weight:700; }
-    .logbox .err{ color: var(--danger); font-weight:700; }
-    .logbox .muted{ color: rgba(255,255,255,.65); }
 
     .hidden-file{
       position:absolute;
@@ -235,7 +189,7 @@
     <div class="header">
       <div class="title">
         <h1>C4 проверка</h1>
-        <p>Загрузите DRAWIO и файл заказа, выберите контур и нажмите «Старт».</p>
+        <p>Выберите режим, загрузите файл(ы) и нажмите «Старт». Внизу появится окно вывода.</p>
       </div>
     </div>
 
@@ -245,46 +199,88 @@
           {% csrf_token %}
 
           <!-- скрытые инпуты файлов -->
-          <input id="id_drawio" class="hidden-file" type="file" name="drawio_file" accept=".drawio,.xml" required>
-          <input id="id_excel" class="hidden-file" type="file" name="excel_file" accept=".xlsx,.xls" required>
+          <input id="id_drawio" class="hidden-file" type="file" name="drawio_file" accept=".drawio,.xml">
+          <input id="id_excel" class="hidden-file" type="file" name="excel_file" accept=".xlsx,.xls">
 
           <div class="grid">
+            <!-- Левая колонка -->
             <div>
               <p class="section-title">Файлы</p>
-              <div class="upload-row">
-                <button type="button" class="btn" id="btnDrawio">Загрузка drawio</button>
-                <button type="button" class="btn" id="btnExcel">Загрузка заказа</button>
+
+              <!-- Блок диаграммы (drawio + контур) -->
+              <div id="block-diagram">
+                <div class="upload-row">
+                  <button type="button" class="btn" id="btnDrawio">Загрузка drawio</button>
+                </div>
+
+                <div class="meta">
+                  <div class="pill" id="drawioName"><b>DRAWIO:</b> <span class="muted">не выбран</span></div>
+                </div>
+
+
+
+                <div class="hint">
+                  В режиме «Проверка диаграммы» требуется drawio. Excel скрыт.
+                </div>
               </div>
 
-              <div class="meta">
-                <div class="pill" id="drawioName"><b>DRAWIO:</b> <span class="muted">не выбран</span></div>
-                <div class="pill" id="excelName"><b>Заказ:</b> <span class="muted">не выбран</span></div>
-              </div>
+              <!-- Блок услуг (только excel) -->
+              <div id="block-services">
+                <div id="block-over" style="margin-top:12px;">
+                  <label style="display:flex; gap:10px; align-items:center; cursor:pointer; user-select:none;">
+                    <input type="checkbox" id="id_over" name="over" style="width:18px; height:18px;">
+                    <span style="font-weight:800;">Включить завышения</span>
+                  </label>
+                </div>
+                <div class="upload-row">
+                  <button type="button" class="btn" id="btnExcel">Загрузка заказа</button>
+                </div>
+                <p class="section-title" style="margin-top:12px;">Что проверяем</p>
+                  <div id="block-order-single">
+                    <button type="button" class="btn" id="btnExcelNew">Загрузка заказа</button>
+                    <div class="pill" id="excelNewName"><b>Заказ:</b> <span class="muted">не выбран</span></div>
+                  </div>
 
-              <div class="hint">
-                Поддержка: drawio/xml и xlsx/xls. После нажатия «Старт» ниже появится окно вывода.
+                  <div id="block-order-compare" style="margin-top:12px;">
+                    <button type="button" class="btn" id="btnExcelCompareNew">Новый заказ</button>
+                    <div class="pill" id="excelCompareNewName"><b>Новый:</b> <span class="muted">не выбран</span></div>
+
+                    <div style="height:10px;"></div>
+
+                    <button type="button" class="btn" id="btnExcelCompareOld">Старый заказ</button>
+                    <div class="pill" id="excelCompareOldName"><b>Старый:</b> <span class="muted">не выбран</span></div>
+                  </div>
+
+                <div class="meta">
+                  <div class="pill" id="excelName"><b>Заказ:</b> <span class="muted">не выбран</span></div>
+                </div>
+
+                <div class="hint">
+                  В режиме «Проверка услуг» требуется только Excel (заказ). Drawio и контур скрыты.
+                </div>
+
               </div>
             </div>
 
+            <!-- Правая колонка -->
             <div>
-              <p class="section-title">Контур</p>
-              <div class="env">
-                <input type="radio" id="env_prod" name="environment" value="PROD" checked>
-                <label for="env_prod">Prod</label>
+              <p class="section-title">Режим проверки</p>
+              <div class="env" style="margin-bottom:12px;">
+                <input type="radio" id="mode_diag" name="mode" value="diagram"
+                       {% if mode != "services" %}checked{% endif %}>
+                <label for="mode_diag">Проверка диаграммы</label>
 
-                <input type="radio" id="env_psi" name="environment" value="PSI">
-                <label for="env_psi">ПСИ</label>
-
-                <input type="radio" id="env_dev" name="environment" value="DEV_TEST">
-                <label for="env_dev">DEV/TEST</label>
-              </div>
-
-              <div class="hint">
-                Можно выбрать только один контур — это сделано радиокнопками, но выглядит как кнопки.
+                <input type="radio" id="mode_services" name="mode" value="services"
+                       {% if mode == "services" %}checked{% endif %}>
+                <label for="mode_services">Проверка заказа</label>
               </div>
 
               <div class="actions">
                 <button type="submit" class="btn btn-primary">Старт</button>
+              </div>
+
+              <div class="hint">
+                Переключение режима скрывает/показывает нужные поля мгновенно.
               </div>
             </div>
           </div>
@@ -301,6 +297,7 @@
   </div>
 
   <script>
+    // File dialog buttons
     const drawioInput = document.getElementById("id_drawio");
     const excelInput  = document.getElementById("id_excel");
     const btnDrawio   = document.getElementById("btnDrawio");
@@ -308,10 +305,10 @@
     const drawioName  = document.getElementById("drawioName");
     const excelName   = document.getElementById("excelName");
 
-    btnDrawio.addEventListener("click", () => drawioInput.click());
-    btnExcel.addEventListener("click", () => excelInput.click());
+    btnDrawio?.addEventListener("click", () => drawioInput.click());
+    btnExcel?.addEventListener("click", () => excelInput.click());
 
-    function setPill(pillEl, label, file) {
+    function setPill(pillEl, file) {
       const span = pillEl.querySelector("span");
       if (!file) {
         span.textContent = "не выбран";
@@ -322,8 +319,87 @@
       span.className = "";
     }
 
-    drawioInput.addEventListener("change", () => setPill(drawioName, "DRAWIO", drawioInput.files[0]));
-    excelInput.addEventListener("change", () => setPill(excelName, "Заказ", excelInput.files[0]));
+    drawioInput.addEventListener("change", () => setPill(drawioName, drawioInput.files[0]));
+    excelInput.addEventListener("change", () => setPill(excelName, excelInput.files[0]));
+
+    // Mode switch (diagram vs services)
+    const modeDiag = document.getElementById("mode_diag");
+    const modeServices = document.getElementById("mode_services");
+    const blockDiagram = document.getElementById("block-diagram");
+    const blockServices = document.getElementById("block-services");
+    const subParams  = document.getElementById("sub_params");
+    const subCompare = document.getElementById("sub_compare");
+    const subSec     = document.getElementById("sub_sec");
+    const blockOver = document.getElementById("block-over");
+    const excelNewInput = document.getElementById("id_excel_new");
+    const excelOldInput = document.getElementById("id_excel_old");
+
+    const btnExcelNew = document.getElementById("btnExcelNew");
+    const btnExcelCompareNew = document.getElementById("btnExcelCompareNew");
+    const btnExcelCompareOld = document.getElementById("btnExcelCompareOld");
+
+    const blockOrderSingle = document.getElementById("block-order-single");
+    const blockOrderCompare = document.getElementById("block-order-compare");
+
+    const excelNewName = document.getElementById("excelNewName");
+    const excelCompareNewName = document.getElementById("excelCompareNewName");
+    const excelCompareOldName = document.getElementById("excelCompareOldName");
+    function applyMode() {
+      const isServices = modeServices.checked;
+      const isParams   = subParams && subParams.checked;
+      const isCompare  = subCompare && subCompare.checked;
+      const isSec      = subSec && subSec.checked;
+
+      // диаграмма
+      blockDiagram.style.display = isServices ? "none" : "";
+
+      // блок заказа всегда виден (ты так хотел)
+      blockServices.style.display = "";
+
+      // показываем нужные поля заказа
+      if (blockOrderSingle)  blockOrderSingle.style.display  = (isServices && !isCompare) ? "" : "none";
+      if (blockOrderCompare) blockOrderCompare.style.display = (isServices && isCompare) ? "" : "none";
+
+      // required
+      drawioInput.required = !isServices;
+
+      // В режиме "Проверка заказа":
+      // - params/security -> нужен только новый
+      // - compare -> нужен новый и старый
+      excelNewInput.required = isServices;
+      excelOldInput.required = isServices && isCompare;
+
+      // Галочка "завышения" только params
+      const overBlock = document.getElementById("block-over");
+      if (overBlock) overBlock.style.display = (isServices && isParams) ? "" : "none";
+    }
+
+    function setPill(pillEl, file) {
+      const span = pillEl.querySelector("span");
+      if (!file) { span.textContent = "не выбран"; span.className = "muted"; return; }
+      span.textContent = file.name;
+      span.className = "";
+    }
+
+    excelNewInput.addEventListener("change", () => {
+      setPill(excelNewName, excelNewInput.files[0]);
+      setPill(excelCompareNewName, excelNewInput.files[0]);
+    });
+
+    excelOldInput.addEventListener("change", () => {
+      setPill(excelCompareOldName, excelOldInput.files[0]);
+    });
+    subParams?.addEventListener("change", applyMode);
+    subCompare?.addEventListener("change", applyMode);
+    subSec?.addEventListener("change", applyMode);
+    btnExcelNew?.addEventListener("click", () => excelNewInput.click());
+    btnExcelCompareNew?.addEventListener("click", () => excelNewInput.click());
+    btnExcelCompareOld?.addEventListener("click", () => excelOldInput.click());
+
+    modeDiag.addEventListener("change", applyMode);
+    modeServices.addEventListener("change", applyMode);
+
+    applyMode();
   </script>
 </body>
 </html>
