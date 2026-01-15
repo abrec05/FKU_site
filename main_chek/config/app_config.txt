@@ -1,0 +1,4 @@
+test_zak: skiprows=0;header=0;sheet=Потребитель
+target: header=0;sheet=Услуги 1-2.1
+enable_iaas=true
+enable_paas=true

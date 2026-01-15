@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Сначала копируем только зависимости и устанавливаем их
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Затем копируем сам код (flask_app.py и всё прочее из текущей директории)
+COPY . .
+
+# Запускаем gunicorn, указывая модуль flask_app и переменную app внутри него
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "flask_app:app"]

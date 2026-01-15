@@ -1,0 +1,73 @@
+document.addEventListener('DOMContentLoaded', () => {
+  // === 1) Drag’n’Drop ===
+  document.querySelectorAll('.dropzone').forEach(zone => {
+    const targetInput = zone.getAttribute('data-target');
+
+    // при перетаскивании
+    ['dragenter','dragover'].forEach(ev => {
+      zone.addEventListener(ev, e => {
+        e.preventDefault();
+        zone.classList.add('hover');
+      });
+    });
+    // при выходе/броске
+    ['dragleave','drop'].forEach(ev => {
+      zone.addEventListener(ev, e => {
+        e.preventDefault();
+        zone.classList.remove('hover');
+      });
+    });
+    // собственно установка файлов
+    zone.addEventListener('drop', e => {
+      const files = e.dataTransfer.files;
+      if (!files.length) return;
+      document.getElementById(targetInput).files = files;
+    });
+  });
+
+  // Кнопка «Отмена» внутри каждой обёртки
+  document.querySelectorAll('.cancel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const wrapper = btn.closest('.dz-wrapper');
+      const input   = wrapper.querySelector('input[type=file]');
+      input.value = ''; // сброс
+    });
+  });
+
+  // === 2) AJAX-сабмит на Flask ===
+  const form        = document.getElementById('order-checker-form');
+  const resultBlock = document.getElementById('order-checker-result');
+  const submitBtn   = form.querySelector('.process-btn');
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    resultBlock.style.display = 'none';
+    resultBlock.textContent = '';
+
+    const fd = new FormData(form);
+
+    try {
+      const resp = await fetch(EP_CONFIG.apiUrl, {
+        method: 'POST',
+        body: fd
+      });
+      if (!resp.ok) throw new Error(`Ошибка HTTP ${resp.status}`);
+
+      let text;
+      try {
+        const json = await resp.json();
+        text = json.report ?? JSON.stringify(json, null, 2);
+      } catch {
+        text = await resp.text();
+      }
+
+      resultBlock.textContent = text;
+    } catch (err) {
+      resultBlock.textContent = 'Ошибка: ' + err.message;
+    } finally {
+      resultBlock.style.display = 'block';
+      submitBtn.disabled = false;
+    }
+  });
+});
