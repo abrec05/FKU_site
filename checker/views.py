@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-
+# from .storage import save_excel_once
 import warnings
 import xml.etree.ElementTree as ET
 
@@ -39,8 +39,8 @@ def _run_diagram_check(drawio_path: str) -> str:
     """
     # ВАЖНО: импорт внутри функции, чтобы не падать импортом при старте, если пути ещё не настроены
     try:
-        import c4_config.global_word_book as gwb
-        from diagram_analis.extract_c4_names import extract_c4_names
+        from c4_checker_lib.с4_config import global_word_book as gwb
+        from c4_checker_lib.diagram_analis.extract_c4_names import extract_c4_names
     except Exception as e:
         return f"Ошибка импорта C4-проверки: {e}"
 
@@ -62,61 +62,91 @@ def _run_diagram_check(drawio_path: str) -> str:
 
 
 def index(request):
-    output = None
-    mode = "diagram"
-    submode = "params"
+    try:
+        output = None
+        mode = "diagram"
+        submode = "params"
 
-    if request.method == "POST":
-        warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+        if request.method == "POST":
+            warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-        mode = request.POST.get("mode", "diagram")
-        submode = request.POST.get("submode", "params")
-
-        # --- ПРОВЕРКА ЗАКАЗА ---
-        if mode == "services":
+            mode = request.POST.get("mode", "diagram")
             submode = request.POST.get("submode", "params")
+            if mode == "diagram":
+                excel_new = request.FILES.get("excel_new_file")
+                # if excel_new:
+                    # try:
+                    #     save_excel_once(excel_new, source="diagram")
+                    # except Exception:
+                    #     pass
+            # --- ПРОВЕРКА ЗАКАЗА ---
+            if mode == "services":
+                submode = request.POST.get("submode", "params")
 
-            new_file = request.FILES.get("excel_new_file")
-            old_file = request.FILES.get("excel_old_file")
+                new_file = request.FILES.get("excel_new_file")
+                # if new_file:
+                    # try:
+                    #     save_excel_once(new_file, source="order_params")
+                    # except Exception:
+                    #     pass
 
-            if not new_file:
-                return render(request, "checker/main.html",
-                              {"output": "Нужно загрузить новый заказ", "mode": mode, "submode": submode})
+                old_file = request.FILES.get("excel_old_file")  # будет только для compare
 
-            new_path = _save_upload(new_file)
+                if submode == "params":
+                    if not new_file:
+                        return render(request, "checker/main.html",
+                                      {"output": "Нужно загрузить заказ (Excel)", "mode": mode, "submode": submode})
 
-            if submode == "params":
-                over = request.POST.get("over") == "on"
-                output = run_main_chek(new_path, over=over)
+                    # ✅ сохраняем только этот один файл
 
-            elif submode == "security":
-                from .security_runner import run_security_check
-                output = run_security_check(new_path)
 
-            elif submode == "compare":
-                if not old_file:
-                    return render(request, "checker/main.html",
-                                  {"output": "Нужно загрузить старый заказ", "mode": mode, "submode": submode})
-                old_path = _save_upload(old_file)
+                    new_path = _save_upload(new_file)
+                    over = request.POST.get("over") == "on"
+                    output = run_main_chek(new_path, over=over)
 
-                # TODO: сюда подключишь реальную функцию сравнения
-                output = f"Сравнение заказов: новый={new_file.name}, старый={old_file.name}"
+                    return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
+
+                elif submode == "security":
+                    if not new_file:
+                        return render(request, "checker/main.html",
+                                      {"output": "Нужно загрузить заказ (Excel)", "mode": mode, "submode": submode})
+
+                    # ✅ для ИБ тоже один файл
+
+
+                    new_path = _save_upload(new_file)
+                    from .security_runner import run_security_check
+                    output = run_security_check(new_path)
+
+                    return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
+
+
+                elif submode == "compare":
+                    new_file = request.FILES.get("excel_new_file")
+                    old_file = request.FILES.get("excel_old_file")
+                    if not new_file or not old_file:
+                        output = "Нужно загрузить НОВЫЙ и СТАРЫЙ заказы (Excel)"
+                        return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
+                    new_path = _save_upload(new_file)
+                    old_path = _save_upload(old_file)
+                    from .compare_runner import run_compare
+                    output = run_compare(new_path, old_path)
+                    return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
+
+            # --- ПРОВЕРКА ДИАГРАММЫ ---
+            drawio = request.FILES.get("drawio_file")
+            if not drawio:
+                return render(request, "checker/main.html", {
+                    "output": "Нужно загрузить drawio файл",
+                    "mode": mode,
+                    "submode": submode
+                })
+
+            drawio_path = _save_upload(drawio)
+            output = _run_diagram_check(drawio_path)
 
             return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
-
-        # --- ПРОВЕРКА ДИАГРАММЫ ---
-        drawio = request.FILES.get("drawio_file")
-        if not drawio:
-            return render(request, "checker/main.html", {
-                "output": "Нужно загрузить drawio файл",
-                "mode": mode,
-                "submode": submode
-            })
-
-        drawio_path = _save_upload(drawio)
-        output = _run_diagram_check(drawio_path)
-
-        return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
-
+    except Exception as e:
+        output = f"Ошибка: данные некорректные.\n\n{e}"
     return render(request, "checker/main.html", {"output": output, "mode": mode, "submode": submode})
 
