@@ -21,7 +21,35 @@ from typing import Any, List, Tuple
 import numpy as np
 from openpyxl import load_workbook
 
+def _norm_str(s):
+    if s is None:
+        return ""
+    return (
+        str(s)
+        .replace("\xa0", " ")   # NBSP → обычный пробел
+        .replace("  ", " ")
+        .strip()
+    )
 # ------------------------ утилиты (из исходника) ------------------------
+def _safe_float(val):
+    """
+    Преобразует значение из Excel в float.
+    Поддерживает ' 4,1', '\\xa04,1', '4.1'
+    """
+    if val is None:
+        return None
+
+    if isinstance(val, (int, float)):
+        return float(val)
+
+    if isinstance(val, str):
+        v = val.replace("\xa0", "").replace(" ", "").replace(",", ".")
+        if v == "":
+            return None
+        return float(v)
+
+    return float(val)
+
 
 def r_file_conf(filename: str) -> List[List[List[str]]]:
     """
@@ -389,7 +417,7 @@ def sravn(listik: int, tabl: int, pr_com: List[str], names_col: List[Any]) -> Li
         while row < len(old):
 
             if fl:
-                pr_com.append('Строка ' + str(old[row][0]) + ' отсутствует в новом файле c параметрами:\n')
+                pr_com.append('Строка ' + _norm_str(old[row][0]) + ' отсутствует в новом файле c параметрами:\n')
                 for _ in range(row, len(old)):
                     str_F.append(old[row])
                     for values in range(0, len(old[row]) - 1):
@@ -398,24 +426,24 @@ def sravn(listik: int, tabl: int, pr_com: List[str], names_col: List[Any]) -> Li
 
             if not fl:
                 if not (type(old[row][0]) is int):
-                    if str(old[row][0]).count('.') == 2:
-                        nomer = str(old[row][0]).split('.')
+                    if _norm_str(old[row][0]).count('.') == 2:
+                        nomer = _norm_str(old[row][0]).split('.')
                         nomer = list(map(float, nomer))
                         nomer_old = nomer[0] + nomer[1] / 10 + nomer[2] / 100
                     else:
-                        nomer_old = float(old[row][0])
+                        nomer_old = _safe_float(old[row][0])
                 else:
-                    nomer_old = float(old[row][0])
+                    nomer_old = _safe_float(old[row][0])
 
                 if not (type(new[row + n][0]) is int):
-                    if str(new[row + n][0]).count('.') == 2:
-                        nomer = str(new[row + n][0]).split('.')
+                    if _norm_str(new[row + n][0]).count('.') == 2:
+                        nomer = _norm_str(new[row + n][0]).split('.')
                         nomer = list(map(float, nomer))
                         nomer_new = nomer[0] + nomer[1] / 10 + nomer[2] / 100
                     else:
-                        nomer_new = float(new[row + n][0])
+                        nomer_new = _safe_float(new[row + n][0])
                 else:
-                    nomer_new = float(new[row + n][0])
+                    nomer_new = _safe_float(new[row + n][0])
 
                 if old[row][0] != new[row + n][0] and nomer_old > nomer_new and not fl:
                     n += 1
@@ -439,7 +467,7 @@ def sravn(listik: int, tabl: int, pr_com: List[str], names_col: List[Any]) -> Li
                 if len(old[row]) != len(new[row + n]):
                     t = 1
                 for j in range(0, len(old[row]) - t):
-                    if str(old[row][j]) != str(new[row + n][j]) and j != 5:
+                    if _norm_str(old[row][j]) != _norm_str(new[row + n][j]) and j != 5:
                         if len(old[row]) > 30:
                             if j != 32:
                                 if f:
