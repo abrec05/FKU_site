@@ -289,7 +289,14 @@
       // ---------- mode radios ----------
       const modeDiag     = byId("mode_diag");
       const modeServices = byId("mode_services");
+      const FIRST_RUN_KEY = "fku_first_run_done";
 
+      if (!localStorage.getItem(FIRST_RUN_KEY)) {
+        if (modeServices) {
+          modeServices.checked = true;
+        }
+        localStorage.setItem(FIRST_RUN_KEY, "1");
+      }
       // ---------- submode radios (order checks) ----------
       const subParams  = byId("sub_params");
       const subCompare = byId("sub_compare");
@@ -392,5 +399,6 @@
         }
     }
     </script>
+
 </body>
 </html>
