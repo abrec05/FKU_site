@@ -236,11 +236,18 @@
               <label for="mode_services">Проверка заказа</label>
             </div>
 
-            <button type="submit" class="btn btn-primary" style="margin-top:10px;">Старт</button>
-
-            <div class="hint">
-              Переключение режима скрывает/показывает нужные поля мгновенно.
+            <button type="submit" class="btn btn-primary" onclick="onStartClick()">
+                Старт
+            </button>
+            <div id="calc-status" style="
+                margin-top: 10px;
+                color: white;
+                font-weight: bold;
+                display: none;
+            ">
+                Идёт расчёт…
             </div>
+
           </div>
 
         </div>
@@ -248,10 +255,20 @@
         <div class="out">
           <p class="section-title">Вывод</p>
           <div class="output-box">{% if output %}{{ output }}{% endif %}</div>
+          {% if output %}
+          <script>
+              const status = document.getElementById("calc-status");
+              if (status) {
+                  status.style.display = "block";
+                  status.textContent = "Расчёт окончен";
+              }
+          </script>
+          {% endif %}
+
         </div>
 
 
-``
+
 
 
   <script>
@@ -366,6 +383,14 @@
       applyMode();
     });
   </script>
-
+  <script>
+    function onStartClick() {
+        const status = document.getElementById("calc-status");
+        if (status) {
+            status.style.display = "block";
+            status.textContent = "Идёт расчёт…";
+        }
+    }
+    </script>
 </body>
 </html>
