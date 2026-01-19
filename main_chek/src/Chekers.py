@@ -2,6 +2,36 @@ import pandas as pd
 from main_chek.src.parsers.universal_parser import *
 
 
+def should_skip_row_errors(row_dict, contur_118: dict) -> bool:
+    """
+    True -> строку полностью пропускаем (не считаем ошибочной).
+    """
+    if row_dict is None:
+        return False
+
+    serv = str(row_dict.get("service_name", "")).strip()
+    if serv != "Сервис IAM (услуга 1.1.13)":
+        return False
+
+    contour = str(row_dict.get("usage_contour", "")).strip().upper()
+    if not contur_118.get(contour, False):
+        return False
+
+    try:
+        cpu = int(float(str(row_dict.get("cpu_iaas_min", 0))))
+        ram = int(float(str(row_dict.get("ram_min", 0))))
+        ssd = int(float(str(row_dict.get("ssd_min", 0))))
+        hddf = int(float(str(row_dict.get("hddf_min", 0))))
+        hdds = int(float(str(row_dict.get("hdds_min", 0))))
+        os_type = int(float(str(row_dict.get("os_type_min", 0))))
+        # если тебе os_amount не нужен — убери
+        os_amount = int(float(str(row_dict.get("os_amount_min", 0))))
+    except Exception:
+        return False
+
+    # твой эталон: 4 8 0 0 100 2 (+ os_amount=2 у тебя уже фигурирует в chek18)
+    return (cpu, ram, ssd, hddf, hdds, os_type, os_amount) == (4, 8, 0, 0, 100, 2, 2)
+
 
 def report_ones(label, actual,pref,desired=None):
        if pref==1:

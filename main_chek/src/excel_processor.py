@@ -1,12 +1,18 @@
 import pandas as pd
 import logging
 import os
-
+from openpyxl import load_workbook
 class ExcelProcessor:
     def __init__(self, cfg_parser):
         # Сохраняем конфигурационный парсер, содержащий настройки приложения
         self.cfg = cfg_parser
 
+    def get_cell_value(self, path: str, cell: str = "F4", sheet_name: str | None = None):
+        wb = load_workbook(path, data_only=True)
+        if sheet_name is None:
+            sheet_name = wb.sheetnames[0]
+        ws = wb[sheet_name]
+        return ws[cell].value
     def _detect_header_row(self, df_sample: pd.DataFrame, required_columns: list[str]) -> int:
         """
         Определяет номер строки, с которой начинается таблица в Excel-файле.

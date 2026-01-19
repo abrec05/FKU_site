@@ -75,6 +75,7 @@ class ContextBuilder:
         df_2list= read_second_table_with_columns(target_path, "Услуги 1-2.1")
         df_all = df_all.loc[:, ~df_all.columns.duplicated()]
         df_test = df_test.loc[:, ~df_test.columns.duplicated()]
+        f4_value = self.proc.get_cell_value(target_path, cell="F4", sheet_name="Титул")
         # Объединение по service_name и digital_prod
         df = pd.merge(
             df_all,
@@ -92,7 +93,7 @@ class ContextBuilder:
         # Генерируем подробный отчёт
         detailed_report = self._generate_report(df, df_all, target_path, df_2list)
         # Составляем итоговый отчёт: сначала missing_report, потом основной
-        final_report = f"{missing_report}\n\n\n{detailed_report}"
+        final_report = f"{f4_value}\n\n{missing_report}\n\n\n{detailed_report}"
         return df, final_report, df_2list
 
     def _validate_row(self, row: pd.Series) -> dict:
@@ -205,7 +206,8 @@ class ContextBuilder:
 
                 # Ошибки, собранные валидаторами
                 for param in rename_map.keys():
-
+                    if should_skip_row_errors(row, kontur_for_1_18):
+                        continue
                     if row['service_name'] == 'Сервис управления процессами (услуга 1.1.12)':
                         if row['comment_test'] not in row['comment_min']:
                             continue
