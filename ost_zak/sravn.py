@@ -473,10 +473,12 @@ def sravn(listik: int, tabl: int, pr_com: List[str], names_col: List[Any]) -> Li
                                 if f:
                                     pr_com.append('Строка ' + str(old[row][0]) + ' :' + '\n')
                                     f = False
+
+
                                 pr_com.append(
                                     'Вероятно допущена ошибка в параметре ' + _col_name(names_col, j)
                                     + '. В старом заказе данный параметр был ' + str(old[row][j])
-                                    + ', а в новом ' + str(new[row + n][j]) + '.' + '\n'
+                                    + ', а в новом ' + str(new[row][j]) + '.' + '\n'
                                 )
                                 f = True
                         elif j != 12 and old[row][j] != new[row + n][j]:
@@ -486,7 +488,7 @@ def sravn(listik: int, tabl: int, pr_com: List[str], names_col: List[Any]) -> Li
                             pr_com.append(
                                 'Вероятно допущена ошибка в параметре ' + _col_name(names_col, j)
                                 + '. В старом заказе данный параметр был ' + str(old[row][j])
-                                + ', а в новом ' + str(new[row + n][j]) + '.' + '\n'
+                                + ', а в новом ' + str(new[row][j]) + '.' + '\n'
                             )
 
             row += 1
