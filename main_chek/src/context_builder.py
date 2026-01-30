@@ -140,11 +140,10 @@ class ContextBuilder:
 
         lines = ["Таблица 1 (сводный отчёт):"]
         remarks = check_1_18(df_all)
-        vitrin_iam_params = check_vitrin_iam_iaas_params_by_contours(df_all)
-        if vitrin_iam_params:
-            lines.append("Витринный заказ — проверка параметров 1.1.13 (IaaS):")
-            for m in vitrin_iam_params:
-                lines.append(f" - {m.strip()}")
+        vitrin_rows_errors = check_vitrin_fixed_params_rows(df_all)
+        if vitrin_rows_errors:
+            for e in vitrin_rows_errors:
+                lines.append(f" - {e}")
             lines.append("")
         kontur_for_1_18 = check_service_118_by_contours(df_all)
         # 5) Печатаем результаты
@@ -248,7 +247,16 @@ class ContextBuilder:
                     comment=row['comment_min']
                     # Проверка на особенные услуги
                     kontur=row['usage_contour']# Здесь будет храниться текущщий контур обробатываемой строки
-
+                    _current_contour = str(row.get("usage_contour", "")).strip().upper()
+                    if kontur_for_1_18.get(_current_contour, False) and row.get("service_name") in (
+                            "Сервис IAM (услуга 1.1.13)",
+                            "Сервис мониторинга (услуга 1.1.16)",
+                    ):
+                        continue
+                    _current_contour = str(row.get("usage_contour", "")).strip().upper()
+                    if kontur_for_1_18.get(_current_contour, False) and row.get(
+                            "service_name") == "Сервис IAM (услуга 1.1.13)":
+                        continue
                     if (not(chek(row['service_name'],label, actual, desired, quant) is None) or (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None))) and f18==False:
                         if ((row['service_name'] in ('Сервис IAM (услуга 1.1.13)')) or (row['service_name'] in ('Сервис журналирования (услуга 1.1.14)')) or (row['service_name'] in ('Сервис аудита (услуга 1.1.15)')) or (row['service_name'] in ('Сервис мониторинга (услуга 1.1.16)'))):
                             if (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None)):

@@ -362,6 +362,85 @@ def chek18(serv, label, actual, desired, contur, row_dict, f18, contur_118):
     return None
 
 
+def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
+    """
+    Если заказ витринный, то для строк с услугами 1.1.13/1.1.14/1.1.15/1.1.16
+    проверяем строго IaaS-параметры. При несовпадении — ошибка с № п/п.
+    """
+    if df_all is None or df_all.empty:
+        return []
+
+    df = df_all.copy()
+
+    # статусы как обычно (если у тебя другой набор — оставь свой)
+    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"}
+    if "service_status" in df.columns:
+        df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
+
+    # определяем витринность: в заказе есть 1.1.18 и нет лишних услуг (кроме 1.1.31)
+    services_all = df["service_name"].astype(str).tolist()
+
+    def _has(code: str) -> bool:
+        return any(re.search(rf"\(услуга\s*{re.escape(code)}\)", s) for s in services_all)
+
+    def _allowed_only() -> bool:
+        allowed = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
+        for s in services_all:
+            m = re.search(r"\(услуга\s*([0-9.]+)\)", str(s))
+            if m and m.group(1) not in allowed:
+                return False
+        return True
+
+    if not (_has("1.1.18") and _allowed_only()):
+        return []
+
+    # эталоны по скрину (IaaS блок)
+    EXPECTED_BY_CODE = {
+        "1.1.13": {"cpu_iaas": 4, "ram": 8,  "ssd": 0,   "hddf": 0, "hdds": 100, "os_type": 2, "os_amount": 2},
+        "1.1.16": {"cpu_iaas": 8, "ram": 8,  "ssd": 200, "hddf": 0, "hdds": 100, "os_type": 2, "os_amount": 2},
+    }
+
+    need_cols = set().union(*[set(v.keys()) for v in EXPECTED_BY_CODE.values()])
+    missing_cols = [c for c in need_cols if c not in df.columns]
+    if missing_cols:
+        return [f"Витринный заказ: нет колонок IaaS для проверки параметров: {missing_cols}"]
+
+    errors: list[str] = []
+
+    for idx, row in df.iterrows():
+        sname = str(row.get("service_name", "")).strip()
+        m = re.search(r"\(услуга\s*([0-9.]+)\)", sname)
+        if not m:
+            continue
+
+        code = m.group(1)
+        if code not in EXPECTED_BY_CODE:
+            continue
+
+        expected = EXPECTED_BY_CODE[code]
+        bad = []
+
+        for col, exp in expected.items():
+            try:
+                val = int(float(row.get(col, 0)))
+            except Exception:
+                bad.append(f"{col}=<не число> (нужно {exp})")
+                continue
+
+            if val != exp:
+                bad.append(f"{col}={val} (нужно {exp})")
+
+        if bad:
+            row_no = row.get("№ п/п", idx)  # № п/п из Excel, если есть
+            contour = str(row.get("usage_contour", "")).strip()
+            errors.append(
+                f"Строка {row_no} (контур '{contour}', {sname}): неверные параметры IaaS: " + ", ".join(bad)
+            )
+
+    return errors
+
+
+
 def chek2(label, actual):
     if (label in ('Предоставление пространства имен на кластере Kubernetes (услуга 1.2.1.2)', 'Выделение места (услуга 1.2.1.3)')):
         if 'Тип операционной системы' in label:
@@ -559,8 +638,7 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
                 return False
         return True
 
-    is_vitrin = _has("1.1.18") and _allowed_only()
-    if not is_vitrin:
+    if not _has("1.1.18"):
         return []
 
     # эталон IaaS (ВАЖНО: используем именно cpu_iaas/ram/ssd/hddf/hdds/os_type/os_amount)
@@ -568,6 +646,15 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
         "cpu_iaas": 4,
         "ram": 8,
         "ssd": 0,
+        "hddf": 0,
+        "hdds": 100,
+        "os_type": 2,
+        "os_amount": 2,
+    }
+    expected_116 = {
+        "cpu_iaas": 8,
+        "ram": 8,
+        "ssd": 200,
         "hddf": 0,
         "hdds": 100,
         "os_type": 2,
@@ -612,9 +699,36 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
 
         if not ok_any:
             comments.append(
-                f"Витринный заказ: контур '{contour}' — нет ни одной 1.1.13 с IaaS параметрами "
+                f"Контур '{contour}' — нет ни одной 1.1.13 с IaaS параметрами "
                 f"(CPU=4,RAM=8,SSD=0,HDD Fast=0,HDD Slow=100,Тип ОС=2,Кол-во ОС=2)\n"
             )
+        # --- Витринный заказ: все 1.1.16 должны иметь особые IaaS параметры ---
+        svc_116 = sub[sub["service_name"].astype(str).str.contains(r"\(услуга\s*1\.1\.16\)", regex=True)]
+
+        if not svc_116.empty:
+            for idx, r in svc_116.iterrows():
+                ok = True
+                bad = []
+
+                for col, exp in expected_116.items():
+                    try:
+                        v = int(float(r[col]))
+                    except Exception:
+                        ok = False
+                        bad.append(f"{col}=<не число>")
+                        continue
+
+                    if v != exp:
+                        ok = False
+                        bad.append(f"{col}={v} (нужно {exp})")
+
+                if not ok:
+                    comments.append(
+                        f"Контур '{contour}' — 1.1.16 не соответствует IaaS параметрам: "
+                        + ", ".join(bad)
+                        + "\n"
+                    )
+
 
     return comments
 
