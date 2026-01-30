@@ -52,6 +52,25 @@ DEFAULT_REQUIRED_SERVICES_MAP = {
     ]
 }
 
+# --- Витринный заказ (первая таблица) ---
+VITRIN_BASE_SERVICES = {
+    "Сервис IAM (услуга 1.1.13)",
+    "Сервис журналирования (услуга 1.1.14)",
+    "Сервис аудита (услуга 1.1.15)",
+    "Сервис мониторинга (услуга 1.1.16)",
+    "Сервис «Витрина данных» (услуга 1.1.18)",
+}
+
+VITRIN_OPTIONAL_SERVICES = {
+    "Сервис управление развертыванием ПО (услуга 1.1.31)",
+}
+
+VITRIN_ALLOWED_SERVICES = VITRIN_BASE_SERVICES | VITRIN_OPTIONAL_SERVICES
+VITRIN_IAM = "Сервис IAM (услуга 1.1.13)"
+VITRIN_118 = "Сервис «Витрина данных» (услуга 1.1.18)"  #
+VITRIN_31 = "Сервис управление развертыванием ПО (услуга 1.1.31)"
+
+
 
 def parse_services_data(file_path: str, sheet_name: str = "Услуги 1-2.1") -> pd.DataFrame:
     """
@@ -123,26 +142,7 @@ def check_required_services(
     sheet_name: str = "Услуги 1-2.1",
     required_map: dict = None
 ) -> list:
-    """
-    Проверяет наличие обязательных сервисов в рамках каждого контура.
 
-    Логика:
-    1. Загружает данные через parse_services_data().
-    2. Оставляет только строки со статусами
-       "Новая услуга" и "Заказанная услуга".
-    3. Для каждого контура из required_map проверяет,
-       какие сервисы из списка отсутствуют.
-
-    Параметры:
-    file_path: путь к .xlsx-файлу
-    sheet_name: имя листа с таблицей услуг
-    required_map: словарь контур->список обязательных сервисов
-                  (используется DEFAULT_REQUIRED_SERVICES_MAP по умолчанию)
-
-    Возвращает:
-    Список строк-описаний отсутствующих сервисов, например:
-      ["Для контура 'TEST' отсутствует обязательная услуга: Сервис IAM (услуга 1.13)", ...]
-    """
     # 1) Берём пользовательскую карту или дефолтную
     service_map = required_map or DEFAULT_REQUIRED_SERVICES_MAP
 
@@ -154,22 +154,30 @@ def check_required_services(
         valid_statuses = ["Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"]
     df = df[df["Статус услуги"].isin(valid_statuses)]
 
+    # --- определяем, витринный ли заказ ---
+    present_services_all = set(df["Наименование услуги"].tolist())
+
+    is_vitrin = (VITRIN_118 in present_services_all) and present_services_all.issubset(VITRIN_ALLOWED_SERVICES)
+
     comments = []
-    # 3) По каждому контуру сравниваем список обязательных и найденных сервисов
     for contour_key, expected_services in service_map.items():
         mask = df["Контур использования"].str.upper() == contour_key
         sub = df[mask]
         if sub.empty:
-            # Если для контура нет ни одной услуги — пропускаем без ошибок
             continue
 
         present = set(sub["Наименование услуги"].tolist())
+
+        # --- Витринный заказ: 1.1.31 необязательна + ровно одна 1.1.13 на контур ---
+        if is_vitrin:
+            expected_services = [x for x in expected_services if "(услуга 1.1.31)" not in x]
+
         for req in expected_services:
             if req not in present:
                 comments.append(
                     f"Для контура '{contour_key}' отсутствует обязательная услуга: {req}\n"
-            )
-   
+                )
+
     return comments
 
 
@@ -347,6 +355,27 @@ def read_second_table_with_columns(path, sheet_name=None):
     df = dfm.copy()
     df.columns = [ _norm(c) for c in flat_cols ]
     df = df.dropna(how="all").reset_index(drop=True)
+
+    import re
+
+    df.columns = [
+        re.sub(r"\.\d+$", "", str(c).strip())
+        for c in df.columns
+    ]
+
+    if df.columns.duplicated().any():
+        keep_series = {}
+        for name in dict.fromkeys(df.columns):  # уникальные, сохраняя порядок
+            block = df.loc[:, df.columns == name]  # DataFrame из всех дублей
+            if block.shape[1] == 1:
+                keep_series[name] = block.iloc[:, 0]
+            else:
+                # выбираем колонку с максимальным числом НЕ NaN
+                counts = block.notna().sum(axis=0).to_numpy()
+                best_i = int(counts.argmax())
+                keep_series[name] = block.iloc[:, best_i]
+
+        df = pd.DataFrame(keep_series)
 
     required = [
         "№ п/п",

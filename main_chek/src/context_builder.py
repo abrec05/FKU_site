@@ -109,10 +109,22 @@ class ContextBuilder:
 
 
     def _generate_report(self, df: pd.DataFrame,df_all: pd.DataFrame,  path, df_2list) -> str:
-        """
-        Формирует подробный текстовый отчёт по ошибкам валидации.
-        Отчёт разбит по строкам таблицы, с указанием услуг и параметров.
-        """
+        import re
+
+        services_all = df_all["service_name"].astype(str).tolist()
+
+        def _has(code: str) -> bool:
+            return any(re.search(rf"\(услуга\s*{re.escape(code)}\)", s) for s in services_all)
+
+        def _allowed_only() -> bool:
+            allowed = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
+            for s in services_all:
+                m = re.search(r"\(услуга\s*([0-9.]+)\)", str(s))
+                if m and m.group(1) not in allowed:
+                    return False
+            return True
+
+        is_vitrin_order = _has("1.1.18") and _allowed_only()
         display_map = {
             'vCPU, ядер': 'vCPU, ядер',
             'RAM, Гб':    'RAM, Гб',
@@ -140,12 +152,16 @@ class ContextBuilder:
 
         lines = ["Таблица 1 (сводный отчёт):"]
         remarks = check_1_18(df_all)
-
+        vitrin_rows_errors = check_vitrin_fixed_params_rows(df_all)
+        if vitrin_rows_errors:
+            for e in vitrin_rows_errors:
+                lines.append(f" - {e}")
+            lines.append("")
         kontur_for_1_18 = check_service_118_by_contours(df_all)
         # 5) Печатаем результаты
         if remarks:
             for r in remarks:
-                lines.append(" -", r)
+                lines.append(f" - {r}")
         count_212 = parse_kubernetes_service_counts(path)
         count_212_by_gis = parse_kubernetes_service_counts_by_gis(path)
 
@@ -242,8 +258,17 @@ class ContextBuilder:
                         continue
                     comment=row['comment_min']
                     # Проверка на особенные услуги
-                    kontur=row['usage_contour']# Здесь будет храниться текущщий контур обробатываемой строки
 
+                    _current_contour = str(row.get("usage_contour", "")).strip().upper()
+
+                    # В контуре с 1.1.18: обычную проверку 1.1.13 не запускаем (её делает check_1_18)
+                    if kontur_for_1_18.get(_current_contour, False) and row.get(
+                            "service_name") == "Сервис IAM (услуга 1.1.13)":
+                        continue
+
+                    # Для витринного заказа: обычную проверку 1.1.16 не запускаем (её делает построчная витринная проверка)
+                    if is_vitrin_order and row.get("service_name") == "Сервис мониторинга (услуга 1.1.16)":
+                        continue
                     if (not(chek(row['service_name'],label, actual, desired, quant) is None) or (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None))) and f18==False:
                         if ((row['service_name'] in ('Сервис IAM (услуга 1.1.13)')) or (row['service_name'] in ('Сервис журналирования (услуга 1.1.14)')) or (row['service_name'] in ('Сервис аудита (услуга 1.1.15)')) or (row['service_name'] in ('Сервис мониторинга (услуга 1.1.16)'))):
                             if (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None)):
@@ -300,14 +325,14 @@ class ContextBuilder:
             mass2=[]
             com=[]
             # вызываем твою функцию проверки
-            if not(row.isna().any()):
-                com=full_chek2(row)
+            if row.dropna().empty:
+                continue
 
-                if len(com)>0:
-                    mass2=com
-                
-                if not _ov_flag:
-                    mass2 = [m for m in mass2 if not (isinstance(m, str) and str(m).startswith("Завышен параметр"))]
+            com = full_chek2(row)
+
+            mass2 = com if com else []
+            if not _ov_flag:
+                mass2 = [m for m in mass2 if not (isinstance(m, str) and str(m).startswith("Завышен параметр"))]
 
             if mass2:
                 svc = row['Наименование услуги']
