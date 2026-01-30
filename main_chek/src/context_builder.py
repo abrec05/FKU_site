@@ -140,12 +140,17 @@ class ContextBuilder:
 
         lines = ["Таблица 1 (сводный отчёт):"]
         remarks = check_1_18(df_all)
-
+        vitrin_iam_params = check_vitrin_iam_iaas_params_by_contours(df_all)
+        if vitrin_iam_params:
+            lines.append("Витринный заказ — проверка параметров 1.1.13 (IaaS):")
+            for m in vitrin_iam_params:
+                lines.append(f" - {m.strip()}")
+            lines.append("")
         kontur_for_1_18 = check_service_118_by_contours(df_all)
         # 5) Печатаем результаты
         if remarks:
             for r in remarks:
-                lines.append(" -", r)
+                lines.append(f" - {r}")
         count_212 = parse_kubernetes_service_counts(path)
         count_212_by_gis = parse_kubernetes_service_counts_by_gis(path)
 
@@ -300,14 +305,14 @@ class ContextBuilder:
             mass2=[]
             com=[]
             # вызываем твою функцию проверки
-            if not(row.isna().any()):
-                com=full_chek2(row)
+            if row.dropna().empty:
+                continue
 
-                if len(com)>0:
-                    mass2=com
-                
-                if not _ov_flag:
-                    mass2 = [m for m in mass2 if not (isinstance(m, str) and str(m).startswith("Завышен параметр"))]
+            com = full_chek2(row)
+
+            mass2 = com if com else []
+            if not _ov_flag:
+                mass2 = [m for m in mass2 if not (isinstance(m, str) and str(m).startswith("Завышен параметр"))]
 
             if mass2:
                 svc = row['Наименование услуги']

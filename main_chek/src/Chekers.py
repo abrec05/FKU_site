@@ -18,14 +18,14 @@ def should_skip_row_errors(row_dict, contur_118: dict) -> bool:
         return False
 
     try:
-        cpu = int(float(str(row_dict.get("cpu_iaas_min", 0))))
-        ram = int(float(str(row_dict.get("ram_min", 0))))
-        ssd = int(float(str(row_dict.get("ssd_min", 0))))
-        hddf = int(float(str(row_dict.get("hddf_min", 0))))
-        hdds = int(float(str(row_dict.get("hdds_min", 0))))
-        os_type = int(float(str(row_dict.get("os_type_min", 0))))
+        cpu = _to_int(float(str(row_dict.get("cpu_iaas_min", 0))))
+        ram = _to_int(float(str(row_dict.get("ram_min", 0))))
+        ssd = _to_int(float(str(row_dict.get("ssd_min", 0))))
+        hddf = _to_int(float(str(row_dict.get("hddf_min", 0))))
+        hdds = _to_int(float(str(row_dict.get("hdds_min", 0))))
+        os_type = _to_int(float(str(row_dict.get("os_type_min", 0))))
         # если тебе os_amount не нужен — убери
-        os_amount = int(float(str(row_dict.get("os_amount_min", 0))))
+        os_amount = _to_int(float(str(row_dict.get("os_amount_min", 0))))
     except Exception:
         return False
 
@@ -48,9 +48,21 @@ def report_ones(label, actual,pref,desired=None):
            return f"Параметр {label} ({actual}) не верный значения ТК. Требуется значение {desired}."
        
 
-def _to_int(x):
+def _to_int(x) -> int:
     try:
-        return int(float(str(x).strip().replace(',', '.')))
+        if x is None:
+            return 0
+
+        # pandas NaN
+        if isinstance(x, float) and x != x:
+            return 0
+
+        s = str(x).strip()
+        if s == "" or s.lower() in ("nan", "none"):
+            return 0
+
+        s = s.replace(",", ".")
+        return int(float(s))
     except Exception:
         return 0
 
@@ -81,9 +93,9 @@ def _check_hdd_total_row(row):
     return None
 
 def chek(serv, label, actual, desired, contur):
-    actual = int(actual)
-    desired = int(desired)
-    contur  = int(contur)
+    actual = _to_int(actual)
+    desired = _to_int(desired)
+    contur  = _to_int(contur)
     # 1.31
     if (serv in ('Сервис управление развертыванием ПО (услуга 1.1.31)',)):
         if 'CPU' in label:
@@ -278,9 +290,9 @@ def chek18(serv, label, actual, desired, contur, row_dict, f18, contur_118):
         except Exception:
             pass
 
-    actual = int(actual)
-    desired = int(desired)
-    contur  = int(contur)
+    actual = _to_int(actual)
+    desired = _to_int(desired)
+    contur  = _to_int(contur)
 
     # 1.15 — Сервис аудита
     if (serv in ('Сервис аудита (услуга 1.1.15)',)) and (contur != 0):
@@ -420,21 +432,35 @@ def check_1_18(df: pd.DataFrame) -> list:
                 )
     
     return warnings
-    
+
+
+
 def full_chek2(row):
     m=[]
+
     service = str(row["Наименование услуги"]).strip()
     contour = str(row["Контур использования"]).strip().upper()
-
-    vcpu = int(row["vCPU, ядер"] or 0)
-    ram = int(row["RAM, Гб"] or 0)
-    ssd = int(row["SSD, Гб"] or 0)
-    hddf = int(row["HDD Fast, Гб"] or 0)
-    hdds = int(row["HDD Slow, Гб"] or 0)
+    vcpu = _to_int(row.get("vCPU, ядер", 0))
+    ram = _to_int(row.get("RAM, Гб", 0))
+    ssd = _to_int(row.get("SSD, Гб", 0))
+    hddf = _to_int(row.get("HDD Fast, Гб", 0))
+    hdds = _to_int(row.get("HDD Slow, Гб", 0))
+    disk_total = ssd + hddf + hdds
     os_type = str(row["Тип операционной системы"]).strip()
-    os_type = int(float(str(os_type).strip().replace(',', '.')))
-    os_amount = int(row["Количество операционных систем, шт."] or 0)
-    coef = int(row["Коэф-т переподписки"] or 0)
+    os_type = _to_int(float(str(os_type).strip().replace(',', '.')))
+    os_amount = _to_int(row["Количество операционных систем, шт."]or 0)
+    coef = _to_int(row["Коэф-т переподписки"] or 0)
+
+    if service == "Предоставление виртуальной машины (услуга 1.2.1.1)":
+        if vcpu < 2:
+            m.append(report_ones("vCPU, ядер", vcpu, 0, 2))
+
+        if ram < 2:
+            m.append(report_ones("RAM, Гб", ram, 0, 2))
+
+        if disk_total < 50:
+            # В сообщении явно показываем, что это сумма трёх колонок
+            m.append(report_ones("Диск (SSD+HDD Fast+HDD Slow), Гб", disk_total, 0, 50))
 
     # 1. VM (2.1.1), DEV/TEST
     if service == "Предоставление виртуальной машины (услуга 1.2.1.1)" and contour in ("DEV", "TEST"):
@@ -443,7 +469,7 @@ def full_chek2(row):
         if ram == 0: m.append(report_ones("RAM, Гб", ram,-1, 'Не нулевое'))
         if (ssd == 0 and hddf == 0 and hdds == 0): m.append('Хотя бы 1 из параметров: SSD, Гб, HDD Fast, Гб, HDD Slow, Гб должен быть не нулевым')
         if os_type == 0: m.append(report_ones("Тип операционной системы", os_type,-1, 'Не нулевое'))
-        if os_amount != 1: m.append(report_ones("Количество операционных систем, шт.",-1, os_amount, 1))
+        if os_amount != 1: m.append(report_ones("Количество операционных систем, шт.",os_amount, -1, 1))
 
     # 2. VM (2.1.1), PROD
     if service == "Предоставление виртуальной машины (услуга 1.2.1.1)" and contour == "PROD":
@@ -501,5 +527,95 @@ def check_service_118_by_contours(df_all):
             result[c] = True
 
     return result
+import re
+
+def check_vitrin_iam_iaas_params_by_contours(df_all):
+    """
+    Для витринного заказа: на каждом контуре должна существовать ХОТЯ БЫ ОДНА услуга 1.1.13
+    с параметрами ИМЕННО из блока IaaS:
+      cpu_iaas=4, ram=8, ssd=0, hddf=0, hdds=100, os_type=2, os_amount=2
+    """
+    if df_all is None or df_all.empty:
+        return []
+
+    df = df_all.copy()
+
+    # берём только нужные статусы (как у тебя в остальном проекте)
+    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"}
+    if "service_status" in df.columns:
+        df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
+
+    # определяем "витринность" по списку услуг в заказе
+    services_all = df["service_name"].astype(str).tolist()
+
+    def _has(code: str) -> bool:
+        return any(re.search(rf"\(услуга\s*{re.escape(code)}\)", s) for s in services_all)
+
+    def _allowed_only() -> bool:
+        allowed = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
+        for s in services_all:
+            m = re.search(r"\(услуга\s*([0-9.]+)\)", str(s))
+            if m and m.group(1) not in allowed:
+                return False
+        return True
+
+    is_vitrin = _has("1.1.18") and _allowed_only()
+    if not is_vitrin:
+        return []
+
+    # эталон IaaS (ВАЖНО: используем именно cpu_iaas/ram/ssd/hddf/hdds/os_type/os_amount)
+    expected = {
+        "cpu_iaas": 4,
+        "ram": 8,
+        "ssd": 0,
+        "hddf": 0,
+        "hdds": 100,
+        "os_type": 2,
+        "os_amount": 2,
+    }
+
+    # проверяем, что колонки вообще есть
+    missing_cols = [c for c in expected.keys() if c not in df.columns]
+    if missing_cols:
+        return [f"Витринный заказ: в target нет колонок IaaS для проверки 1.1.13: {missing_cols}\n"]
+
+    comments = []
+
+    # контуры, где вообще есть услуги (или можно фиксированный список)
+    df["usage_contour"] = df["usage_contour"].astype(str).str.strip()
+    contours = sorted(set(df["usage_contour"].str.upper()) - {""})
+
+    for contour in contours:
+        sub = df[df["usage_contour"].str.upper() == contour]
+        iam = sub[sub["service_name"].astype(str).str.contains(r"\(услуга\s*1\.1\.13\)", regex=True)]
+        if iam.empty:
+            comments.append(f"Контур '{contour}' — отсутствует услуга 1.1.13\n")
+            continue
+
+        # есть ли хотя бы одна строка 1.1.13 с нужными IaaS параметрами
+        ok_any = False
+        for _, r in iam.iterrows():
+            ok = True
+            for col, exp in expected.items():
+                try:
+                    val = r[col]
+                    v = int(float(val))  # нормализация 4 / 4.0 / "4"
+                except Exception:
+                    ok = False
+                    break
+                if v != exp:
+                    ok = False
+                    break
+            if ok:
+                ok_any = True
+                break
+
+        if not ok_any:
+            comments.append(
+                f"Витринный заказ: контур '{contour}' — нет ни одной 1.1.13 с IaaS параметрами "
+                f"(CPU=4,RAM=8,SSD=0,HDD Fast=0,HDD Slow=100,Тип ОС=2,Кол-во ОС=2)\n"
+            )
+
+    return comments
 
         
