@@ -1,7 +1,15 @@
 import pandas as pd
 from main_chek.src.parsers.universal_parser import *
 
-
+PARAM_LABELS = {
+    "cpu_iaas": "vCPU, ядер",
+    "ram": "RAM, Гб",
+    "ssd": "SSD, Гб",
+    "hddf": "HDD Fast, Гб",
+    "hdds": "HDD Slow, Гб",
+    "os_type": "Тип операционной системы",
+    "os_amount": "Количество ОС",
+}
 def should_skip_row_errors(row_dict, contur_118: dict) -> bool:
     """
     True -> строку полностью пропускаем (не считаем ошибочной).
@@ -396,7 +404,6 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
 
     # эталоны по скрину (IaaS блок)
     EXPECTED_BY_CODE = {
-        "1.1.13": {"cpu_iaas": 4, "ram": 8,  "ssd": 0,   "hddf": 0, "hdds": 100, "os_type": 2, "os_amount": 2},
         "1.1.16": {"cpu_iaas": 8, "ram": 8,  "ssd": 200, "hddf": 0, "hdds": 100, "os_type": 2, "os_amount": 2},
     }
 
@@ -434,7 +441,8 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
             row_no = row.get("№ п/п", idx)  # № п/п из Excel, если есть
             contour = str(row.get("usage_contour", "")).strip()
             errors.append(
-                f"Строка {row_no} (контур '{contour}', {sname}): неверные параметры IaaS: " + ", ".join(bad)
+                f"Строка {row_no} (контур '{contour}', {sname}): неверные параметры IaaS:\n"
+                + "\n".join([f"   - {x}" for x in bad])
             )
 
     return errors
@@ -455,8 +463,7 @@ def chek2(label, actual):
                 return f'Не верный параметр Тип операционной системы ({actual}. Должен быть 1)'
             
 FULL_NAME_118 = (
-    'Сервис «Типовое тиражируемое программное обеспечение витрин данных» '
-    '(«Витрина НСУД»)» (услуга 1.1.18)'
+    'Сервис «Витрина данных» (услуга 1.1.18)'
 )
 FULL_NAME_113 = 'Сервис IAM (услуга 1.1.13)'  # Замените на ваше точное полное название 1.13
 
@@ -479,36 +486,61 @@ def check_1_18(df: pd.DataFrame) -> list:
     df['service_name'] = df['service_name'].str.strip()
     
     # Найдём все контуры, где service_name точно равно FULL_NAME_118
-    contours_with_118 = df.loc[
-        df['service_name'] == FULL_NAME_118,
-        'usage_contour'
-    ].unique()
+    mask_118 = df["service_name"].astype(str).str.contains(r"\(услуга\s*1\.1\.18\)", regex=True, na=False)
+    contours_with_118 = df.loc[mask_118, "usage_contour"].unique()
     
     warnings = []
     for contour in sorted(contours_with_118):
         sub = df[df['usage_contour'] == contour]
         # Ищем строки с полным именем 1.13
-        sub113 = sub[sub['service_name'] == FULL_NAME_113]
-        
-        if sub113.empty:
-            warnings.append(
-                f'Контур "{contour}": '
-                f'нужно добавить строку "{FULL_NAME_113}" '
-                f'с параметрами {EXPECTED_PARAMS}'
-            )
-        else:
-            # Проверяем, есть ли среди них хотя бы одна строка,
-            # у которой _все_ столбцы из EXPECTED_PARAMS совпадают
-            mask = (
-                sub113[list(EXPECTED_PARAMS)] ==
-                pd.Series(EXPECTED_PARAMS)
-            ).all(axis=1)
-            if not mask.any():
-                warnings.append(
-                    f'Контур "{contour}": услуга 1.1.13 есть, '
-                    'но ни одна запись не соответствует всем параметрам; '
-                    f'ожидается {EXPECTED_PARAMS}'
-                )
+        mask_113 = sub["service_name"].astype(str).str.contains(r"\(услуга\s*1\.1\.13\)", regex=True, na=False)
+        sub113 = sub[mask_113]
+
+        expected = {'cpu_iaas': 4, 'ram': 8, 'ssd': 0, 'hddf': 0, 'hdds': 100, 'os_type': 2, 'os_amount': 2}
+
+        # sub113 — все строки 1.1.13 в данном контуре
+        # если есть хотя бы одна полностью правильная — НЕ РУГАЕМСЯ ВООБЩЕ
+        has_ok = False
+        for _, r in sub113.iterrows():
+            ok = True
+            for col, exp in expected.items():
+                try:
+                    v = int(float(r.get(col)))
+                except Exception:
+                    ok = False
+                    break
+                if v != exp:
+                    ok = False
+                    break
+            if ok:
+                has_ok = True
+                break
+
+        # если нет ни одной правильной — тогда выводим построчные ошибки по каждой 1.1.13
+        if not has_ok:
+            for _, r in sub113.iterrows():
+                bad = []
+                for col, exp in expected.items():
+                    try:
+                        v = int(float(r.get(col)))
+                    except Exception:
+                        param_name = PARAM_LABELS.get(col, col)
+                        bad.append(f"Параметр {param_name} (<не число>) не верны по ТК. Требуется значение {exp}.")
+                        continue
+                    if v != exp:
+                        param_name = PARAM_LABELS.get(col, col)
+                        bad.append(
+                            f"Параметр {param_name} ({v}) не верны по ТК. Требуется значение {exp}."
+                        )
+
+                if bad:
+                    row_no = r.get("№ п/п", r.name)
+                    kontur = str(r.get("usage_contour", "")).strip().upper()
+                    sname = str(r.get("service_name", "")).strip()
+                    warnings.append(
+                        f"Строка {row_no} (контур '{kontur}', {sname}): неверные параметры IaaS:\n"
+                        + "\n".join([f"   - {x}" for x in bad])
+                    )
     
     return warnings
 
@@ -715,12 +747,14 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
                         v = int(float(r[col]))
                     except Exception:
                         ok = False
-                        bad.append(f"{col}=<не число>")
+                        param_name = PARAM_LABELS.get(col, col)
+                        bad.append(f"Параметр {param_name} (<не число>) не верны по ТК. Требуется значение {exp}.")
                         continue
 
                     if v != exp:
                         ok = False
-                        bad.append(f"{col}={v} (нужно {exp})")
+                        param_name = PARAM_LABELS.get(col, col)
+                        bad.append(f"Параметр {param_name} ({v}) не верны по ТК. Требуется значение {exp}.")
 
                 if not ok:
                     comments.append(

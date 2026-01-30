@@ -170,11 +170,13 @@ def check_required_services(
 
         # --- Витринный заказ: 1.1.31 необязательна + ровно одна 1.1.13 на контур ---
         if is_vitrin:
-            vitrin_required = list(VITRIN_BASE_SERVICES - {VITRIN_118})
-            for req in vitrin_required:
-                if req not in present:
-                    comments.append(f"...")
-            continue
+            expected_services = [x for x in expected_services if "(услуга 1.1.31)" not in x]
+
+        for req in expected_services:
+            if req not in present:
+                comments.append(
+                    f"Для контура '{contour_key}' отсутствует обязательная услуга: {req}\n"
+                )
 
     return comments
 
