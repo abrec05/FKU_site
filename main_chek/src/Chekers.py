@@ -431,11 +431,13 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
             try:
                 val = int(float(row.get(col, 0)))
             except Exception:
-                bad.append(f"{col}=<не число> (нужно {exp})")
+                param_name = PARAM_LABELS.get(col, col)
+                bad.append(f"Параметр {param_name} (<не число>) не верны по ТК. Требуется значение {exp}.")
                 continue
 
             if val != exp:
-                bad.append(f"{col}={val} (нужно {exp})")
+                param_name = PARAM_LABELS.get(col, col)
+                bad.append(f"Параметр {param_name} ({val}) не верны по ТК. Требуется значение {exp}.")
 
         if bad:
             row_no = row.get("№ п/п", idx)  # № п/п из Excel, если есть
