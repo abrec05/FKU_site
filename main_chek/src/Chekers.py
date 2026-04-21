@@ -53,7 +53,7 @@ def report_ones(label, actual,pref,desired=None):
        if pref==0:
            return f"Параметр {label} ({actual}) ниже значения ТК. Требуется значение {desired}."
        if pref==-1:
-           return f"Параметр {label} ({actual}) не верный значения ТК. Требуется значение {desired}."
+           return f"Параметр {label} ({actual}) не верный значения ТК. Требуется {desired}."
        
 
 def _to_int(x) -> int:
@@ -107,9 +107,9 @@ def chek(serv, label, actual, desired, contur):
     # 1.31
     if (serv in ('Сервис управление развертыванием ПО (услуга 1.1.31)',)):
         if 'CPU' in label:
-            if actual != (desired + contur): return report_ones(label, actual, -1, desired)
+            if actual != (desired): return report_ones(label, actual, -1, desired)
         elif 'RAM' in label:
-            if actual != (desired + contur): return report_ones(label, actual, -1, desired)
+            if actual != (desired): return report_ones(label, actual, -1, desired)
         else:
             if actual != desired: return f"Неверный параметр {label} ({actual}). Требуется {desired}."
         return None
@@ -117,9 +117,9 @@ def chek(serv, label, actual, desired, contur):
     # 1.9
     if (serv in ('Сервисы интеграционного взаимодействия (услуга 1.1.9)',)):
         if 'CPU' in label:
-            if actual != (desired + contur): return report_ones(label, actual, -1, desired)
+            if actual != (desired): return report_ones(label, actual, -1, desired)
         elif 'RAM' in label:
-            if actual != (desired + contur): return report_ones(label, actual, -1, desired)
+            if actual != (desired): return report_ones(label, actual, -1, desired)
         else:
             if actual != desired: return f"Неверный параметр {label} ({actual}). Требуется {desired}."
         return None
@@ -352,9 +352,9 @@ def chek18(serv, label, actual, desired, contur, row_dict, f18, contur_118):
     # 1.14 — Сервис журналирования
     if (serv in ('Сервис журналирования (услуга 1.1.14)',)) and (contur != 0):
         if 'CPU' in label:
-            if actual != (desired + 4 * contur): return report_ones(label, actual, -1, desired + 4 * contur)
+            if actual < (desired + 4 * contur): return report_ones(label, actual, -1, desired + 4 * contur)
         elif 'RAM' in label:
-            if actual != (desired + 8 * contur): return report_ones(label, actual, -1, desired + 8 * contur)
+            if actual < (desired + 8 * contur): return report_ones(label, actual, -1, desired + 8 * contur)
         else:
             if actual != desired: return f"Неверный параметр {label} ({actual}). Требуется {desired}."
 
@@ -371,21 +371,15 @@ def chek18(serv, label, actual, desired, contur, row_dict, f18, contur_118):
 
 
 def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
-    """
-    Если заказ витринный, то для строк с услугами 1.1.13/1.1.14/1.1.15/1.1.16
-    проверяем строго IaaS-параметры. При несовпадении — ошибка с № п/п.
-    """
     if df_all is None or df_all.empty:
         return []
 
     df = df_all.copy()
 
-    # статусы как обычно (если у тебя другой набор — оставь свой)
     valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"}
     if "service_status" in df.columns:
         df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
 
-    # определяем витринность: в заказе есть 1.1.18 и нет лишних услуг (кроме 1.1.31)
     services_all = df["service_name"].astype(str).tolist()
 
     def _has(code: str) -> bool:
@@ -399,22 +393,48 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
                 return False
         return True
 
-    if not (_has("1.1.18") and _allowed_only()):
+    def _extract_code(service_name: str) -> str | None:
+        import re
+        m = re.search(r"\(услуга\s*([0-9.]+)\)", str(service_name))
+        return m.group(1) if m else None
+
+    allowed_codes = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
+
+    vitrin_contours = set()
+
+    for contour in df["usage_contour"].astype(str).str.strip().str.upper().unique():
+        sub = df[df["usage_contour"].astype(str).str.strip().str.upper() == contour]
+
+        codes = {
+            _extract_code(s) for s in sub["service_name"].astype(str).tolist()
+            if _extract_code(s)
+        }
+
+        if "1.1.18" in codes and codes.issubset(allowed_codes):
+            vitrin_contours.add(contour)
+
+    if not vitrin_contours:
         return []
 
-    # эталоны по скрину (IaaS блок)
     EXPECTED_BY_CODE = {
-        "1.1.16": {"cpu_iaas": 8, "ram": 8,  "ssd": 200, "hddf": 0, "hdds": 100, "os_type": 2, "os_amount": 2},
+        "1.1.16": {
+            "cpu_iaas": 8,
+            "ram": 8,
+            "ssd": 200,
+            "hddf": 0,
+            "hdds": 100,
+            "os_type": 2,
+            "os_amount": 2
+        },
     }
 
-    need_cols = set().union(*[set(v.keys()) for v in EXPECTED_BY_CODE.values()])
-    missing_cols = [c for c in need_cols if c not in df.columns]
-    if missing_cols:
-        return [f"Витринный заказ: нет колонок IaaS для проверки параметров: {missing_cols}"]
-
-    errors: list[str] = []
+    errors = []
 
     for idx, row in df.iterrows():
+        row_contour = str(row.get("usage_contour", "")).strip().upper()
+
+        if row_contour not in vitrin_contours:
+            continue
         sname = str(row.get("service_name", "")).strip()
         m = re.search(r"\(услуга\s*([0-9.]+)\)", sname)
         if not m:
@@ -440,7 +460,7 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
                 bad.append(f"Параметр {param_name} ({val}) не верны по ТК. Требуется значение {exp}.")
 
         if bad:
-            row_no = row.get("№ п/п", idx)  # № п/п из Excel, если есть
+            row_no = row.get("№ п/п", idx)
             contour = str(row.get("usage_contour", "")).strip()
             errors.append(
                 f"Строка {row_no} (контур '{contour}', {sname}): неверные параметры IaaS:\n"
@@ -449,6 +469,31 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
 
     return errors
 
+
+def check_equal_service_counts_by_contour(count_19_by_contour, count_212_by_contour):
+    """
+    Проверяет, что по каждому контуру количество услуг
+    1.1.9 и 1.2.1.2 совпадает.
+
+    Возвращает список текстов ошибок.
+    """
+    errors = []
+
+    all_contours = set(count_19_by_contour.keys()) | set(count_212_by_contour.keys())
+
+    for contour in sorted(all_contours):
+        count_19 = int(count_19_by_contour.get(contour, 0) or 0)
+        count_212 = int(count_212_by_contour.get(contour, 0) or 0)
+
+        if count_19 != count_212:
+            errors.append(
+                f"на контуре {contour} количество "
+                f"Сервисы интеграционного взаимодействия (услуга 1.1.9) "
+                f"не соответствует "
+                f"Система управления контейнерами (услуга 1.2.1.2)"
+            )
+
+    return errors
 
 
 def chek2(label, actual):
@@ -622,7 +667,7 @@ def check_service_118_by_contours(df_all):
     Возвращает словарь вида:
       {"DEV": True/False, "TEST": True/False, "PROD": True/False, "ПСИ": True/False, "HT": True/False}
     """
-    contours = ["DEV", "TEST", "PROD", "ПСИ", "HT"]
+    contours = ["DEV", "TEST", "PROD", "ПСИ 1", "HT", "ПСИ"]
     result = {c: False for c in contours}
 
     if df_all.empty:
@@ -659,20 +704,25 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
         df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
 
     # определяем "витринность" по списку услуг в заказе
-    services_all = df["service_name"].astype(str).tolist()
+    def _extract_code(service_name: str) -> str | None:
+        m = re.search(r"\(услуга\s*([0-9.]+)\)", str(service_name))
+        return m.group(1) if m else None
 
-    def _has(code: str) -> bool:
-        return any(re.search(rf"\(услуга\s*{re.escape(code)}\)", s) for s in services_all)
+    allowed_codes = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
+    vitrin_contours = set()
 
-    def _allowed_only() -> bool:
-        allowed = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
-        for s in services_all:
-            m = re.search(r"\(услуга\s*([0-9.]+)\)", str(s))
-            if m and m.group(1) not in allowed:
-                return False
-        return True
+    for contour in df["usage_contour"].astype(str).str.strip().str.upper().unique():
+        sub = df[df["usage_contour"].astype(str).str.strip().str.upper() == contour]
 
-    if not _has("1.1.18"):
+        codes = {
+            _extract_code(s) for s in sub["service_name"].astype(str).tolist()
+            if _extract_code(s)
+        }
+
+        if "1.1.18" in codes and codes.issubset(allowed_codes):
+            vitrin_contours.add(contour)
+
+    if not vitrin_contours:
         return []
 
     # эталон IaaS (ВАЖНО: используем именно cpu_iaas/ram/ssd/hddf/hdds/os_type/os_amount)

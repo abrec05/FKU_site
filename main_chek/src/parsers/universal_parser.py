@@ -10,6 +10,21 @@ warnings.filterwarnings(
     message=r".*(Cannot parse header or footer|Data Validation extension).*"
 )
 
+VITRIN_BASE_SERVICES = {
+    "Сервис IAM (услуга 1.1.13)",
+    "Сервис журналирования (услуга 1.1.14)",
+    "Сервис аудита (услуга 1.1.15)",
+    "Сервис мониторинга (услуга 1.1.16)",
+    "Сервис «Витрина данных» (услуга 1.1.18)",
+}
+
+VITRIN_OPTIONAL_SERVICES = {
+    "Сервис управление развертыванием ПО (услуга 1.1.31)",
+}
+
+VITRIN_ALLOWED_SERVICES = VITRIN_BASE_SERVICES | VITRIN_OPTIONAL_SERVICES
+VITRIN_118 = "Сервис «Витрина данных» (услуга 1.1.18)"
+
 # По умолчанию: соответствие контура использования списку обязательных сервисов
 DEFAULT_REQUIRED_SERVICES_MAP = {
     # - контур разработки
@@ -36,7 +51,7 @@ DEFAULT_REQUIRED_SERVICES_MAP = {
         "Сервис мониторинга (услуга 1.1.16)",
         "Сервис управление развертыванием ПО (услуга 1.1.31)"
     ],
-    "ПСИ": [
+    "ПСИ 1": [
         "Сервис IAM (услуга 1.1.13)",
         "Сервис журналирования (услуга 1.1.14)",
         "Сервис аудита (услуга 1.1.15)",
@@ -49,7 +64,14 @@ DEFAULT_REQUIRED_SERVICES_MAP = {
         "Сервис аудита (услуга 1.1.15)",
         "Сервис мониторинга (услуга 1.1.16)",
         "Сервис управление развертыванием ПО (услуга 1.1.31)"
-    ]
+    ],
+    "ПСИ": [
+        "Сервис IAM (услуга 1.1.13)",
+        "Сервис журналирования (услуга 1.1.14)",
+        "Сервис аудита (услуга 1.1.15)",
+        "Сервис мониторинга (услуга 1.1.16)",
+        "Сервис управление развертыванием ПО (услуга 1.1.31)"
+    ],
 }
 
 # --- Витринный заказ (первая таблица) ---
@@ -142,11 +164,8 @@ def check_required_services(
     sheet_name: str = "Услуги 1-2.1",
     required_map: dict = None
 ) -> list:
-
-    # 1) Берём пользовательскую карту или дефолтную
     service_map = required_map or DEFAULT_REQUIRED_SERVICES_MAP
 
-    # 2) Загружаем и фильтруем данные по статусам
     df = parse_services_data(file_path, sheet_name)
     if f:
         valid_statuses = ["Новая услуга", "Заказанная услуга"]
@@ -154,10 +173,18 @@ def check_required_services(
         valid_statuses = ["Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"]
     df = df[df["Статус услуги"].isin(valid_statuses)]
 
-    # --- определяем, витринный ли заказ ---
-    present_services_all = set(df["Наименование услуги"].tolist())
+    def _extract_code(service_name: str) -> str | None:
+        m = re.search(r"\(услуга\s*([0-9.]+)\)", str(service_name))
+        return m.group(1) if m else None
 
-    is_vitrin = (VITRIN_118 in present_services_all) and present_services_all.issubset(VITRIN_ALLOWED_SERVICES)
+    present_codes_all = {
+        _extract_code(s) for s in df["Наименование услуги"].tolist()
+        if _extract_code(s)
+    }
+
+    allowed_codes = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
+
+    is_vitrin = ("1.1.18" in present_codes_all) and present_codes_all.issubset(allowed_codes)
 
     comments = []
     for contour_key, expected_services in service_map.items():
@@ -168,7 +195,7 @@ def check_required_services(
 
         present = set(sub["Наименование услуги"].tolist())
 
-        # --- Витринный заказ: 1.1.31 необязательна + ровно одна 1.1.13 на контур ---
+        # в витринном заказе 1.1.31 не обязательна
         if is_vitrin:
             expected_services = [x for x in expected_services if "(услуга 1.1.31)" not in x]
 
@@ -181,10 +208,12 @@ def check_required_services(
     return comments
 
 
+
+
 def parse_kubernetes_service_counts_by_gis(
     file_path: str,
     sheet_name: str = "Услуги 1-2.1",
-    target_service_name: str = "Система управления контейнера (услуга 1.2.1.2)",
+    target_service_name: str = "Система управления контейнерами (услуга 1.2.1.2)",
     valid_statuses: list | None = None,
 ) -> dict:
     """
@@ -198,11 +227,11 @@ def parse_kubernetes_service_counts_by_gis(
     def _norm(s: str) -> str:
         return " ".join(str(s).strip().split()).lower()
 
-    valid_statuses = valid_statuses or ["Новая услуга", "Заказанная услуга"]
+    valid_statuses = valid_statuses or ["Новая услуга", "Заказанная услуга", "Обновленная услуга"]
     valid_norm = {_norm(s) for s in valid_statuses}
     # ---------------------------------------------------------------
 
-    empty = {c: {} for c in ["DEV", "TEST", "PROD", "ПСИ", "HT"]}
+    empty = {c: {} for c in ["DEV", "TEST", "PROD", "ПСИ 1", "HT","ПСИ"]}
 
     try:
         df2 = read_second_table_with_columns(file_path, sheet_name=sheet_name)
@@ -236,7 +265,7 @@ def parse_kubernetes_service_counts_by_gis(
             for _, row in sub.iterrows()
         }
 
-    for k in ["DEV", "TEST", "PROD", "ПСИ", "HT"]:
+    for k in ["DEV", "TEST", "PROD", "ПСИ 1", "HT","ПСИ"]:
         result.setdefault(k, {})
     return result
 
@@ -248,7 +277,7 @@ def parse_kubernetes_service_counts(
     target_service_name: str = "Система управления контейнерами (услуга 1.2.1.2)",
 ) -> dict:
     # статусы учитываем ТОЛЬКО эти два
-    valid_statuses = ["Новая услуга", "Заказанная услуга"]
+    valid_statuses = ["Новая услуга", "Заказанная услуга", "Обновленная услуга"]
 
     # 1) Чтение листа без header для поиска
     df_full = pd.read_excel(file_path, sheet_name=sheet_name, header=None, dtype=str)
@@ -282,7 +311,7 @@ def parse_kubernetes_service_counts(
 
     # 7) В словарь + заполняем отсутствующие контуры нулями
     result = dict(counts.values.tolist())
-    for contour in ["DEV", "TEST", "PROD", "ПСИ", "HT"]:
+    for contour in ["DEV", "TEST", "PROD", "ПСИ 1", "HT","ПСИ"]:
         result.setdefault(contour, 0)
     return result
 

@@ -60,6 +60,7 @@ class ContextBuilder:
             required_map=None
         )
         if missing:
+
             for msg in missing:
                 logging.warning(msg)
             missing_report = (
@@ -113,18 +114,29 @@ class ContextBuilder:
 
         services_all = df_all["service_name"].astype(str).tolist()
 
-        def _has(code: str) -> bool:
-            return any(re.search(rf"\(услуга\s*{re.escape(code)}\)", s) for s in services_all)
+        def _extract_code(service_name: str) -> str | None:
+            m = re.search(r"\(услуга\s*([0-9.]+)\)", str(service_name))
+            return m.group(1) if m else None
 
-        def _allowed_only() -> bool:
-            allowed = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
-            for s in services_all:
-                m = re.search(r"\(услуга\s*([0-9.]+)\)", str(s))
-                if m and m.group(1) not in allowed:
-                    return False
-            return True
+        def _is_vitrin_contour(df_all: pd.DataFrame, contour_name: str) -> bool:
+            allowed_codes = {"1.1.13", "1.1.14", "1.1.15", "1.1.16", "1.1.18", "1.1.31"}
 
-        is_vitrin_order = _has("1.1.18") and _allowed_only()
+            sub = df_all[
+                df_all["usage_contour"].astype(str).str.strip().str.upper() ==
+                str(contour_name).strip().upper()
+                ]
+
+            if sub.empty:
+                return False
+
+            codes = {
+                _extract_code(s) for s in sub["service_name"].astype(str).tolist()
+                if _extract_code(s)
+            }
+
+            return ("1.1.18" in codes) and codes.issubset(allowed_codes)
+
+
         display_map = {
             'vCPU, ядер': 'vCPU, ядер',
             'RAM, Гб':    'RAM, Гб',
@@ -162,22 +174,65 @@ class ContextBuilder:
         if remarks:
             for r in remarks:
                 lines.append(f" - {r}")
-        count_212 = parse_kubernetes_service_counts(path)
-        count_212_by_gis = parse_kubernetes_service_counts_by_gis(path)
 
-        # 1.9 считаем так же «по контурам», вернётся dict
-        count_19_by_contour = parse_kubernetes_service_counts(
-            path,
-            target_service_name="Сервисы интеграционного взаимодействия (услуга 1.1.9)"
+
+        def _norm_text(s):
+            return " ".join(str(s).replace("\xa0", " ").split()).strip()
+
+        valid_statuses = {"Новая услуга", "Заказанная услуга", "Обновленная услуга"}
+
+        # 1.1.9 из первой таблицы
+        df_19 = df_all.copy()
+        df_19["service_name"] = df_19["service_name"].astype(str).map(_norm_text)
+        df_19["usage_contour"] = df_19["usage_contour"].astype(str).map(_norm_text)
+        df_19["gis_name"] = df_19["gis_name"].astype(str).map(_norm_text)
+        df_19["service_status"] = df_19["service_status"].astype(str).map(_norm_text)
+
+        df_19 = df_19[
+            (df_19["service_name"] == "Сервисы интеграционного взаимодействия (услуга 1.1.9)") &
+            (df_19["service_status"].isin(valid_statuses))
+            ]
+
+        count_19_by_pair = (
+            df_19.groupby(["usage_contour", "gis_name"])
+            .size()
+            .to_dict()
         )
 
-        # корректно получаем тоталы
-        total_212 = self._sum_counts(count_212)                # сумма по 2.1.2
-        total_19  = self._sum_counts(count_19_by_contour)      # сумма по 1.9
+        # 1.2.1.2 из второй таблицы
+        df_212 = df_2list.copy()
+        df_212["Наименование услуги"] = df_212["Наименование услуги"].astype(str).map(_norm_text)
+        df_212["Контур использования"] = df_212["Контур использования"].astype(str).map(_norm_text)
+        df_212["Наименование ГИС (Сервиса)"] = df_212["Наименование ГИС (Сервиса)"].astype(str).map(_norm_text)
+        df_212["Статус услуги"] = df_212["Статус услуги"].astype(str).map(_norm_text)
 
-        if total_19 != total_212:
-            report_5 = "Не совпадает количество услуг 1.1.9 и 1.2.1.2"
-        #report_6_----------------------------------------------------
+        df_212 = df_212[
+            (df_212["Наименование услуги"] == "Система управления контейнерами (услуга 1.2.1.2)") &
+            (df_212["Статус услуги"].isin(valid_statuses))
+            ]
+
+        count_212_by_pair = (
+            df_212.groupby(["Контур использования", "Наименование ГИС (Сервиса)"])
+            .size()
+            .to_dict()
+        )
+
+        all_pairs = set(count_19_by_pair.keys()) | set(count_212_by_pair.keys())
+
+        for contour, gis in sorted(all_pairs):
+            count_19 = count_19_by_pair.get((contour, gis), 0)
+            count_212 = count_212_by_pair.get((contour, gis), 0)
+
+            if count_19 != count_212:
+                lines.append(
+                    f" - на контуре {contour}, ГИС {gis}, количество "
+                    f"Сервисы интеграционного взаимодействия (услуга 1.1.9): {count_19}, "
+                    f"Система управления контейнерами (услуга 1.2.1.2): {count_212}. "
+                    f"Количество не соответствует"
+                )
+
+        if all_pairs:
+            lines.append("")
 
         for _, row in df.iterrows():
             import re
@@ -192,32 +247,18 @@ class ContextBuilder:
             gis_raw    = (row.get('gis_name') or '')
 
             kontur = _canon(kontur_raw)
+            is_vitrin_current_contour = _is_vitrin_contour(df_all, kontur)
             gis    = _canon(gis_raw)
 
-            # словарь квантов по ГИС в рамках контура
-            by_gis = count_212_by_gis.get(kontur, {}) or {}
-
-            # индекс для сопоставления после канонизации
-            canon_index = { _canon(k): k for k in by_gis.keys() }
-
-            if gis:
-                # если ГИС указан в строке, используем ТОЛЬКО его квант (или 0)
-                matched_key = canon_index.get(gis)
-                q_gis = by_gis.get(matched_key, 0) if matched_key is not None else 0
-                quant = q_gis
-            else:
-                # если ГИС в строке пуст — тогда используем общий по контуру
-                quant = count_212.get(kontur, 0)
+            pair_key = (kontur, gis)
+            quant = count_212_by_pair.get(pair_key, 0)
 
             row_num = row.get('№ п/п', '<n/a>')
             msgs = []
             if row['service_name']=='Сервис управления процессами (услуга 1.1.12)':
                 if ((pd.isna(row['comment_min']))):
                     continue
-            if f:
-                r=('Новая услуга', 'Заказанная услуга')
-            else:
-                r=('Новая услуга', 'Заказанная услуга', 'Изменение заказанной услуги')
+            r = ('Новая услуга', 'Заказанная услуга', 'Обновленная услуга')
             if row['service_status'] in r:
 
                 # Ошибки, собранные валидаторами
@@ -267,7 +308,7 @@ class ContextBuilder:
                         continue
 
                     # Для витринного заказа: обычную проверку 1.1.16 не запускаем (её делает построчная витринная проверка)
-                    if is_vitrin_order and row.get("service_name") == "Сервис мониторинга (услуга 1.1.16)":
+                    if is_vitrin_current_contour and row.get("service_name") == "Сервис мониторинга (услуга 1.1.16)":
                         continue
                     if (not(chek(row['service_name'],label, actual, desired, quant) is None) or (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None))) and f18==False:
                         if ((row['service_name'] in ('Сервис IAM (услуга 1.1.13)')) or (row['service_name'] in ('Сервис журналирования (услуга 1.1.14)')) or (row['service_name'] in ('Сервис аудита (услуга 1.1.15)')) or (row['service_name'] in ('Сервис мониторинга (услуга 1.1.16)'))):
