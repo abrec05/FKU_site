@@ -376,7 +376,7 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
 
     df = df_all.copy()
 
-    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"}
+    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги","Продление услуги"}
     if "service_status" in df.columns:
         df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
 
@@ -699,7 +699,7 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
     df = df_all.copy()
 
     # берём только нужные статусы (как у тебя в остальном проекте)
-    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"}
+    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги","Продление услуги"}
     if "service_status" in df.columns:
         df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
 

@@ -70,15 +70,16 @@ class ExcelProcessor:
         rename_map = {
             'Наименование ГИС (Сервиса)': 'gis_name',
             'Наименование услуги': 'service_name',
-            'vCPU, ядер':           'cpu_iaas',
-            'RAM, Гб':              'ram',
-            'SSD, Гб':              'ssd',
-            'HDD Fast, Гб':         'hddf',
-            'HDD Slow, Гб':         'hdds',
+            'Статус услуги': 'service_status',
+            'vCPU, ядер': 'cpu_iaas',
+            'RAM, Гб': 'ram',
+            'SSD, Гб': 'ssd',
+            'HDD Fast, Гб': 'hddf',
+            'HDD Slow, Гб': 'hdds',
             'Тип операционной системы': 'os_type',
             'Количество операционных систем, шт.': 'os_amount',
-            'Цифровой продукт':     'digital_prod',
-            'Комментарий':          'comment'
+            'Цифровой продукт': 'digital_prod',
+            'Комментарий': 'comment'
         }
         df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 

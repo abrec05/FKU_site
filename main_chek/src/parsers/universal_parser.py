@@ -168,9 +168,9 @@ def check_required_services(
 
     df = parse_services_data(file_path, sheet_name)
     if f:
-        valid_statuses = ["Новая услуга", "Заказанная услуга"]
+        valid_statuses = ["Новая услуга", "Заказанная услуга", "Продление услуги"]
     else:
-        valid_statuses = ["Новая услуга", "Заказанная услуга", "Изменение заказанной услуги"]
+        valid_statuses = ["Новая услуга", "Заказанная услуга", "Обновленная услуга", "Продление услуги"]
     df = df[df["Статус услуги"].isin(valid_statuses)]
 
     def _extract_code(service_name: str) -> str | None:
@@ -227,7 +227,7 @@ def parse_kubernetes_service_counts_by_gis(
     def _norm(s: str) -> str:
         return " ".join(str(s).strip().split()).lower()
 
-    valid_statuses = valid_statuses or ["Новая услуга", "Заказанная услуга", "Обновленная услуга"]
+    valid_statuses = valid_statuses or ["Новая услуга", "Заказанная услуга", "Обновленная услуга" , "Продление услуги"]
     valid_norm = {_norm(s) for s in valid_statuses}
     # ---------------------------------------------------------------
 
@@ -276,8 +276,8 @@ def parse_kubernetes_service_counts(
     header_keyword: str = "Контур использования",
     target_service_name: str = "Система управления контейнерами (услуга 1.2.1.2)",
 ) -> dict:
-    # статусы учитываем ТОЛЬКО эти два
-    valid_statuses = ["Новая услуга", "Заказанная услуга", "Обновленная услуга"]
+
+    valid_statuses = ["Новая услуга", "Заказанная услуга", "Обновленная услуга" , "Продление услуги"]
 
     # 1) Чтение листа без header для поиска
     df_full = pd.read_excel(file_path, sheet_name=sheet_name, header=None, dtype=str)
