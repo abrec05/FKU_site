@@ -2,6 +2,7 @@ import warnings
 import pandas as pd
 import logging
 import re
+from openpyxl import load_workbook
 f=False
 # Подавляем предупреждения openpyxl, связанные с заголовками и расширениями в Excel
 warnings.filterwarnings(
@@ -94,30 +95,21 @@ VITRIN_31 = "Сервис управление развертыванием ПО
 
 
 
-def parse_services_data(file_path: str, sheet_name: str = "Услуги 1-2.1") -> pd.DataFrame:
-    """
-    Загружает и возвращает из Excel данные по услугам.
-
-    Алгоритм:
-    1. Считывает первые строки листа без заголовков.
-    2. Находит индекс строки, содержащей заголовки
-       ("Контур использования", "Наименование услуги", "Статус услуги").
-    3. Перечитывает лист, используя найденный header_idx.
-    4. Нормализует и обрезает значения в названиях колонок и строках.
-
-    Параметры:
-    file_path: путь к .xlsx-файлу
-    sheet_name: имя листа для чтения (по умолчанию "Услуги 1-2.1")
-
-    Возвращает:
-    DataFrame с колонками:
-      - "Контур использования"
-      - "Наименование услуги"
-      - "Статус услуги"
-    """
+def parse_services_data(file_path: str, sheet_name: str = "Услуги 1-2.1"):
     required_cols = ["Контур использования", "Наименование услуги", "Статус услуги"]
 
+    # ===== ОТКРЫВАЕМ EXCEL И ОТБРАСЫВАЕМ СКРЫТЫЕ ЛИСТЫ =====
+    wb = load_workbook(file_path, read_only=True, data_only=True)
 
+    visible_sheets = [
+        ws.title for ws in wb.worksheets
+        if ws.sheet_state == "visible"
+    ]
+
+    if sheet_name not in visible_sheets:
+        raise ValueError(f"Лист '{sheet_name}' скрыт или отсутствует")
+
+    # ===== ЧИТАЕМ ТОЛЬКО ВИДИМЫЙ ЛИСТ =====
     raw = pd.read_excel(
         file_path,
         sheet_name=sheet_name,
