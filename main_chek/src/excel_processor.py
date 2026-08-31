@@ -199,7 +199,10 @@ class ExcelProcessor:
         Читает target-файл Excel, выполняет все преобразования
         и возвращает таблицу с унифицированными колонками для анализа ресурсов.
         """
-        df_full, _ = self._load_target_df(path)
+        df_full, _ = self._load_target_df(
+            path,
+            sheet_name="Услуги 1-2.1"
+        )
         pd.set_option("display.max_rows", None)
         pd.set_option("display.max_columns", None)
         pd.set_option("display.width", None)

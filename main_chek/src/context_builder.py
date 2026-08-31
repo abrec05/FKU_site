@@ -182,15 +182,20 @@ class ContextBuilder:
         valid_statuses = {"Новая услуга", "Заказанная услуга", "Обновленная услуга" , "Продление услуги"}
 
         # 1.1.9 из первой таблицы
+
         df_19 = df_all.copy()
         df_19["service_name"] = df_19["service_name"].astype(str).map(_norm_text)
         df_19["usage_contour"] = df_19["usage_contour"].astype(str).map(_norm_text)
         df_19["gis_name"] = df_19["gis_name"].astype(str).map(_norm_text)
         df_19["service_status"] = df_19["service_status"].astype(str).map(_norm_text)
 
+        valid_statuses_norm = {_norm_text(s).lower() for s in valid_statuses}
+        df_19["service_code"] = df_19["service_name"].map(_extract_code)
+        df_19["status_norm"] = df_19["service_status"].map(lambda x: _norm_text(x).lower())
+
         df_19 = df_19[
-            (df_19["service_name"] == "Сервисы интеграционного взаимодействия (услуга 1.1.9)") &
-            (df_19["service_status"].isin(valid_statuses))
+            (df_19["service_code"] == "1.1.9") &
+            (df_19["status_norm"].isin(valid_statuses_norm))
             ]
 
         count_19_by_pair = (
@@ -206,9 +211,12 @@ class ContextBuilder:
         df_212["Наименование ГИС (Сервиса)"] = df_212["Наименование ГИС (Сервиса)"].astype(str).map(_norm_text)
         df_212["Статус услуги"] = df_212["Статус услуги"].astype(str).map(_norm_text)
 
+        df_212["service_code"] = df_212["Наименование услуги"].map(_extract_code)
+        df_212["status_norm"] = df_212["Статус услуги"].map(lambda x: _norm_text(x).lower())
+
         df_212 = df_212[
-            (df_212["Наименование услуги"] == "Система управления контейнерами (услуга 1.2.1.2)") &
-            (df_212["Статус услуги"].isin(valid_statuses))
+            (df_212["service_code"] == "1.2.1.2") &
+            (df_212["status_norm"].isin(valid_statuses_norm))
             ]
 
         count_212_by_pair = (
@@ -310,19 +318,44 @@ class ContextBuilder:
                     # Для витринного заказа: обычную проверку 1.1.16 не запускаем (её делает построчная витринная проверка)
                     if is_vitrin_current_contour and row.get("service_name") == "Сервис мониторинга (услуга 1.1.16)":
                         continue
-                    if (not(chek(row['service_name'],label, actual, desired, quant) is None) or (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None))) and f18==False:
-                        if ((row['service_name'] in ('Сервис IAM (услуга 1.1.13)')) or (row['service_name'] in ('Сервис журналирования (услуга 1.1.14)')) or (row['service_name'] in ('Сервис аудита (услуга 1.1.15)')) or (row['service_name'] in ('Сервис мониторинга (услуга 1.1.16)'))):
-                            if (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None)):
-                                msgs.append(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18))
-                            elif not (chek(row['service_name'], label, actual, desired, quant) is None):
-                                msgs.append(chek(row['service_name'], label, actual, desired, quant))
-                        elif not(chek(row['service_name'],label, actual, desired, quant) is None):
-                            msgs.append(chek(row['service_name'],label, actual, desired, quant))
-                    elif (not(chek(row['service_name'],label, actual, desired, quant) is None) or (not(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18) is None))) and f18:
-                        if ((row['service_name'] in ('Сервис IAM (услуга 1.1.13)')) or (row['service_name'] in ('Сервис журналирования (услуга 1.1.14)')) or (row['service_name'] in ('Сервис аудита (услуга 1.1.15)')) or (row['service_name'] in ('Сервис мониторинга (услуга 1.1.16)'))):
-                            msgs.append(chek18(row['service_name'],label, actual, desired,quant, row, f18, kontur_for_1_18))
-                        elif not(chek(row['service_name'],label, actual, desired, quant) is None):
-                            msgs.append(chek(row['service_name'],label, actual, desired, quant))
+                    # 1.1.14 проверяем только через chek18,
+                    # чтобы завышение считалось с учетом кванта, а не через обычную chek()
+                    if row['service_name'] == 'Сервис журналирования (услуга 1.1.14)':
+                        err18 = chek18(
+                            row['service_name'],
+                            label,
+                            actual,
+                            desired,
+                            quant,
+                            row,
+                            f18,
+                            kontur_for_1_18
+                        )
+
+                        if err18 is not None:
+                            msgs.append(err18)
+
+                        continue
+
+                    # Все остальные сервисы проверяем по старой логике через chek/chek18
+                    err = chek(row['service_name'], label, actual, desired, quant)
+
+                    if err is not None:
+                        msgs.append(err)
+                    else:
+                        err18 = chek18(
+                            row['service_name'],
+                            label,
+                            actual,
+                            desired,
+                            quant,
+                            row,
+                            f18,
+                            kontur_for_1_18
+                        )
+
+                        if err18 is not None:
+                            msgs.append(err18)
 
                 cpu_iaas = row.get('cpu_iaas')
                 cpu_paas = row.get('cpu_paas')

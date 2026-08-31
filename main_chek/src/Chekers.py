@@ -45,11 +45,11 @@ def report_ones(label, actual,pref,desired=None):
        if pref==1:
            return f"Завышен параметр {label} ({actual}) более чем в 1.5 раза"
        if pref==3:
-            return f"Завышен параметр {label} ({actual})."
+            return f"Завышен параметр {label} ({actual}).более чем в 3 раза"
        if pref==5:
-           return f"Завышен параметр {label} ({actual}). Требуется обоснование."
+           return f"Завышен параметр {label} ({actual}). более чем в 5 раза."
        if pref==8: 
-           return f"Завышен параметр {label} ({actual}). Требуется пересмотр архитектуры и согласование."
+           return f"Завышен параметр {label} ({actual}). более чем в 8 раза ."
        if pref==0:
            return f"Параметр {label} ({actual}) ниже значения ТК. Требуется значение {desired}."
        if pref==-1:
@@ -350,24 +350,41 @@ def chek18(serv, label, actual, desired, contur, row_dict, f18, contur_118):
             elif actual < desired: return report_ones(label, actual, 0, desired)
 
     # 1.14 — Сервис журналирования
-    if (serv in ('Сервис журналирования (услуга 1.1.14)',)) and (contur != 0):
+    # 1.14 — Сервис журналирования
+    if serv == 'Сервис журналирования (услуга 1.1.14)':
         if 'CPU' in label:
-            if actual < (desired + 4 * contur): return report_ones(label, actual, -1, desired + 4 * contur)
-        elif 'RAM' in label:
-            if actual < (desired + 8 * contur): return report_ones(label, actual, -1, desired + 8 * contur)
-        else:
-            if actual != desired: return f"Неверный параметр {label} ({actual}). Требуется {desired}."
+            need = desired + 4 * contur
 
-    # 1.13 — Сервис IAM
-    if (serv in ('Сервис IAM (услуга 1.1.13)')):
-        if 'CPU' in label:
-            if actual != desired: return report_ones(label, actual, -1, desired)
-        elif 'RAM' in label:
-            if actual != desired: return report_ones(label, actual, -1, desired)
-        else:
-            if actual != desired: return f"Неверный параметр {label} ({actual}). Требуется {desired}."
+            if actual > need * 8:
+                return report_ones(label, actual, 8)
+            elif actual > need * 5:
+                return report_ones(label, actual, 5)
+            elif actual > need * 3:
+                return report_ones(label, actual, 3)
+            elif actual > need * 1.5:
+                return report_ones(label, actual, 1)
+            elif actual < need:
+                return report_ones(label, actual, -1, need)
 
-    return None
+        elif 'RAM' in label:
+            need = desired + 8 * contur
+
+            if actual > need * 8:
+                return report_ones(label, actual, 8)
+            elif actual > need * 5:
+                return report_ones(label, actual, 5)
+            elif actual > need * 3:
+                return report_ones(label, actual, 3)
+            elif actual > need * 1.5:
+                return report_ones(label, actual, 1)
+            elif actual < need:
+                return report_ones(label, actual, -1, need)
+
+        else:
+            if actual != desired:
+                return f"Неверный параметр {label} ({actual}). Требуется {desired}."
+
+        return None
 
 
 def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
@@ -376,7 +393,7 @@ def check_vitrin_fixed_params_rows(df_all: pd.DataFrame) -> list[str]:
 
     df = df_all.copy()
 
-    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги","Продление услуги"}
+    valid_statuses = {"Новая услуга", "Заказанная услуга", "Обновленная услуга","Продление услуги"}
     if "service_status" in df.columns:
         df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
 
@@ -699,7 +716,7 @@ def check_vitrin_iam_iaas_params_by_contours(df_all):
     df = df_all.copy()
 
     # берём только нужные статусы (как у тебя в остальном проекте)
-    valid_statuses = {"Новая услуга", "Заказанная услуга", "Изменение заказанной услуги","Продление услуги"}
+    valid_statuses = {"Новая услуга", "Заказанная услуга", "Обновленная услуга","Продление услуги"}
     if "service_status" in df.columns:
         df = df[df["service_status"].astype(str).str.strip().isin(valid_statuses)]
 
